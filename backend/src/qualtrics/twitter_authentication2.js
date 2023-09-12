@@ -8,12 +8,12 @@ Qualtrics.SurveyEngine.addOnload(function()
 	var that = this;
     this.questionclick = function(event,element) {
 		var choice = that.getSelectedChoices()[0];
-		if (choice == 1){
+		if (choice === 1){
 			jQuery("#NextButton").show();
 			this.hidePreviousButton();
 			document.getElementById("incorrect").hidden = true;
 		}
-		else if (choice == 2){
+		else if (choice === 2){
 			this.hideNextButton();
 			this.showPreviousButton();
 			document.getElementById("incorrect").hidden = false;

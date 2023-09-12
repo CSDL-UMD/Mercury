@@ -4,12 +4,11 @@ Qualtrics.SurveyEngine.addOnload(function()
 	this.hideNextButton();
 	this.hidePreviousButton();
 });
-Qualtrics.SurveyEngine.addOnReady(function()
-{
+Qualtrics.SurveyEngine.addOnReady(function() {
 	/*Place your JavaScript here to run when the page is fully displayed*/
 	var xmlHttp1 = new XMLHttpRequest();
 	xmlHttp1.onreadystatechange = function() {
-		if (xmlHttp1.readyState == 4 && xmlHttp1.status == 200){
+		if (xmlHttp1.readyState === 4 && xmlHttp1.status === 200){
 			responsee = JSON.parse(xmlHttp1.responseText);
 			document.getElementById('labelprogress').innerHTML = 'Completed'
 			document.getElementById('file').innerHTML = '100%'

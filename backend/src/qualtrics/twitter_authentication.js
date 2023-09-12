@@ -12,7 +12,7 @@ Qualtrics.SurveyEngine.addOnReady(function()
 		var oauth_token_tt = ""
 		var xmlHttp = new XMLHttpRequest();
     	xmlHttp.onreadystatechange = function() {
-        	if (xmlHttp.readyState == 4 && xmlHttp.status == 200){
+        	if (xmlHttp.readyState === 4 && xmlHttp.status === 200){
 				oauth_token_tt = xmlHttp.responseText;
 				Qualtrics.SurveyEngine.setEmbeddedData( 'oauth_token', xmlHttp.responseText);
 				let popup = window.open("https://colon.umd.edu/qualrender?oauth_token="+oauth_token_tt+"&mode=ELIGIBILITY&participant_id=${e://Field/participant_id}&assignment_id=${e://Field/assignment_id}&project_id=${e://Field/project_id}", "hello", "width=500,height=500");
@@ -21,20 +21,20 @@ Qualtrics.SurveyEngine.addOnReady(function()
 				var count = 1;
 				var pollTimer = window.setInterval(function() {
 					count = count + 1;
-					if (count == 100){
+					if (count === 100){
 						window.clearInterval(pollTimer);
 						document.getElementById("fail").hidden = false;
 					}
 					window.setTimeout(function() {
 						var xmlHttp2 = new XMLHttpRequest();
 						xmlHttp2.onreadystatechange = function() {
-							if (xmlHttp2.readyState == 4 && xmlHttp2.status == 200){
-								if(xmlHttp2.responseText != "####"){
+							if (xmlHttp2.readyState === 4 && xmlHttp2.status === 200){
+								if(xmlHttp2.responseText !== "####"){
 									console.log(xmlHttp2.responseText);
 									if(popup)
 										popup.close();
 									window.clearInterval(pollTimer);
-									if(xmlHttp2.responseText == "error"){
+									if(xmlHttp2.responseText === "error"){
 										document.getElementById("fail").hidden = false;
 									}
 									else{

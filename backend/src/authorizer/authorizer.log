@@ -1,0 +1,42 @@
+INFO:werkzeug:[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://10.104.250.201:5000
+INFO:werkzeug:[33mPress CTRL+C to quit[0m
+INFO:werkzeug: * Restarting with stat
+WARNING:werkzeug: * Debugger is active!
+INFO:werkzeug: * Debugger PIN: 145-985-010
+INFO:werkzeug:127.0.0.1 - - [14/Sep/2023 15:59:03] "OPTIONS /auth/ HTTP/1.1" 200 -
+DEBUG:requests_oauthlib.oauth1_auth:Signing request <PreparedRequest [POST]> using client <Client client_key=jLZQcrtxWdm3xlvTdFCpPnG17, client_secret=****, resource_owner_key=None, resource_owner_secret=None, signature_method=HMAC-SHA1, signature_type=AUTH_HEADER, callback_uri=None, rsa_key=None, verifier=None, realm=None, encoding=utf-8, decoding=utf-8, nonce=None, timestamp=None>
+DEBUG:requests_oauthlib.oauth1_auth:Including body in call to sign: True
+DEBUG:oauthlib.oauth1.rfc5849:Collected params: [('oauth_nonce', '114002625031732061991694721543'), ('oauth_timestamp', '1694721543'), ('oauth_version', '1.0'), ('oauth_signature_method', 'HMAC-SHA1'), ('oauth_consumer_key', 'jLZQcrtxWdm3xlvTdFCpPnG17'), ('oauth_callback', 'http://127.0.0.1:5000/qualcallback')]
+DEBUG:oauthlib.oauth1.rfc5849:Normalized params: oauth_callback=http%3A%2F%2F127.0.0.1%3A5000%2Fqualcallback&oauth_consumer_key=jLZQcrtxWdm3xlvTdFCpPnG17&oauth_nonce=114002625031732061991694721543&oauth_signature_method=HMAC-SHA1&oauth_timestamp=1694721543&oauth_version=1.0
+DEBUG:oauthlib.oauth1.rfc5849:Normalized URI: https://api.twitter.com/oauth/request_token
+DEBUG:oauthlib.oauth1.rfc5849:Signing: signature base string: POST&https%3A%2F%2Fapi.twitter.com%2Foauth%2Frequest_token&oauth_callback%3Dhttp%253A%252F%252F127.0.0.1%253A5000%252Fqualcallback%26oauth_consumer_key%3DjLZQcrtxWdm3xlvTdFCpPnG17%26oauth_nonce%3D114002625031732061991694721543%26oauth_signature_method%3DHMAC-SHA1%26oauth_timestamp%3D1694721543%26oauth_version%3D1.0
+DEBUG:oauthlib.oauth1.rfc5849:Signature: /rWnntRLDlg3KwpyYYbx4JV+xH0=
+DEBUG:oauthlib.oauth1.rfc5849:Encoding URI, headers and body to utf-8.
+DEBUG:requests_oauthlib.oauth1_auth:Updated url: https://api.twitter.com/oauth/request_token
+DEBUG:requests_oauthlib.oauth1_auth:Updated headers: {b'User-Agent': b'python-requests/2.31.0', b'Accept-Encoding': b'gzip, deflate, br', b'Accept': b'*/*', b'Connection': b'keep-alive', b'Content-Length': b'59', b'Content-Type': b'application/x-www-form-urlencoded', b'Authorization': b'OAuth oauth_nonce="114002625031732061991694721543", oauth_timestamp="1694721543", oauth_version="1.0", oauth_signature_method="HMAC-SHA1", oauth_consumer_key="jLZQcrtxWdm3xlvTdFCpPnG17", oauth_signature="%2FrWnntRLDlg3KwpyYYbx4JV%2BxH0%3D"'}
+DEBUG:requests_oauthlib.oauth1_auth:Updated body: b'oauth_callback=http%3A%2F%2F127.0.0.1%3A5000%2Fqualcallback'
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): api.twitter.com:443
+DEBUG:urllib3.connectionpool:https://api.twitter.com:443 "POST /oauth/request_token HTTP/1.1" 200 129
+INFO:root:Twitter access successfull
+INFO:werkzeug:127.0.0.1 - - [14/Sep/2023 15:59:03] "GET /auth/ HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [14/Sep/2023 15:59:04] "OPTIONS /auth/getscreenname?oauth_token=tk6G6QAAAAABp85XAAABipVGjE8 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [14/Sep/2023 15:59:04] "GET /auth/getscreenname?oauth_token=tk6G6QAAAAABp85XAAABipVGjE8 HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [14/Sep/2023 15:59:05] "GET /auth/getscreenname?oauth_token=tk6G6QAAAAABp85XAAABipVGjE8 HTTP/1.1" 200 -
+DEBUG:requests_oauthlib.oauth1_auth:Signing request <PreparedRequest [POST]> using client <Client client_key=jLZQcrtxWdm3xlvTdFCpPnG17, client_secret=****, resource_owner_key=tk6G6QAAAAABp85XAAABipVGjE8, resource_owner_secret=****, signature_method=HMAC-SHA1, signature_type=AUTH_HEADER, callback_uri=None, rsa_key=None, verifier=tHMbaloMqS4W9tWFUHDp2aIiVArYL3gj, realm=None, encoding=utf-8, decoding=utf-8, nonce=None, timestamp=None>
+DEBUG:requests_oauthlib.oauth1_auth:Including body in call to sign: False
+DEBUG:oauthlib.oauth1.rfc5849:Collected params: [('oauth_nonce', '11146138848257681431694721545'), ('oauth_timestamp', '1694721545'), ('oauth_version', '1.0'), ('oauth_signature_method', 'HMAC-SHA1'), ('oauth_consumer_key', 'jLZQcrtxWdm3xlvTdFCpPnG17'), ('oauth_token', 'tk6G6QAAAAABp85XAAABipVGjE8'), ('oauth_verifier', 'tHMbaloMqS4W9tWFUHDp2aIiVArYL3gj')]
+DEBUG:oauthlib.oauth1.rfc5849:Normalized params: oauth_consumer_key=jLZQcrtxWdm3xlvTdFCpPnG17&oauth_nonce=11146138848257681431694721545&oauth_signature_method=HMAC-SHA1&oauth_timestamp=1694721545&oauth_token=tk6G6QAAAAABp85XAAABipVGjE8&oauth_verifier=tHMbaloMqS4W9tWFUHDp2aIiVArYL3gj&oauth_version=1.0
+DEBUG:oauthlib.oauth1.rfc5849:Normalized URI: https://api.twitter.com/oauth/access_token
+DEBUG:oauthlib.oauth1.rfc5849:Signing: signature base string: POST&https%3A%2F%2Fapi.twitter.com%2Foauth%2Faccess_token&oauth_consumer_key%3DjLZQcrtxWdm3xlvTdFCpPnG17%26oauth_nonce%3D11146138848257681431694721545%26oauth_signature_method%3DHMAC-SHA1%26oauth_timestamp%3D1694721545%26oauth_token%3Dtk6G6QAAAAABp85XAAABipVGjE8%26oauth_verifier%3DtHMbaloMqS4W9tWFUHDp2aIiVArYL3gj%26oauth_version%3D1.0
+DEBUG:oauthlib.oauth1.rfc5849:Signature: l23i+XGJEr5oO6vRydfebfX19g8=
+DEBUG:oauthlib.oauth1.rfc5849:Encoding URI, headers and body to utf-8.
+DEBUG:requests_oauthlib.oauth1_auth:Updated url: https://api.twitter.com/oauth/access_token
+DEBUG:requests_oauthlib.oauth1_auth:Updated headers: {b'User-Agent': b'python-requests/2.31.0', b'Accept-Encoding': b'gzip, deflate, br', b'Accept': b'*/*', b'Connection': b'keep-alive', b'Content-Length': b'0', b'Authorization': b'OAuth oauth_nonce="11146138848257681431694721545", oauth_timestamp="1694721545", oauth_version="1.0", oauth_signature_method="HMAC-SHA1", oauth_consumer_key="jLZQcrtxWdm3xlvTdFCpPnG17", oauth_token="tk6G6QAAAAABp85XAAABipVGjE8", oauth_verifier="tHMbaloMqS4W9tWFUHDp2aIiVArYL3gj", oauth_signature="l23i%2BXGJEr5oO6vRydfebfX19g8%3D"'}
+DEBUG:requests_oauthlib.oauth1_auth:Updated body: None
+DEBUG:urllib3.connectionpool:Starting new HTTPS connection (1): api.twitter.com:443
+DEBUG:urllib3.connectionpool:https://api.twitter.com:443 "POST /oauth/access_token HTTP/1.1" 200 174
+INFO:werkzeug:127.0.0.1 - - [14/Sep/2023 15:59:06] "GET /qualcallback?oauth_token=tk6G6QAAAAABp85XAAABipVGjE8&oauth_verifier=tHMbaloMqS4W9tWFUHDp2aIiVArYL3gj HTTP/1.1" 200 -
+INFO:werkzeug:127.0.0.1 - - [14/Sep/2023 15:59:06] "GET /auth/getscreenname?oauth_token=tk6G6QAAAAABp85XAAABipVGjE8 HTTP/1.1" 200 -

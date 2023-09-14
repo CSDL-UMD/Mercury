@@ -15,7 +15,7 @@ Qualtrics.SurveyEngine.addOnReady(function()
         	if (xmlHttp.readyState === 4 && xmlHttp.status === 200){
 				oauth_token_tt = xmlHttp.responseText;
 				Qualtrics.SurveyEngine.setEmbeddedData( 'oauth_token', xmlHttp.responseText);
-				let popup = window.open("https://colon.umd.edu/qualrender?oauth_token="+oauth_token_tt+"&mode=ELIGIBILITY&participant_id=${e://Field/participant_id}&assignment_id=${e://Field/assignment_id}&project_id=${e://Field/project_id}", "hello", "width=500,height=500");
+				let popup = window.open("https://api.twitter.com/oauth/authorize?oauth_token="+oauth_token_tt, "hello", "width=500,height=500");
 				if(!popup) 
 					document.getElementById("popup").hidden = false;
 				var count = 1;
@@ -49,13 +49,13 @@ Qualtrics.SurveyEngine.addOnReady(function()
 								}
 							}
 						}
-						xmlHttp2.open("GET", 'https://colon.umd.edu/auth/getscreenname?oauth_token='+oauth_token_tt, true);
+						xmlHttp2.open("GET", 'http://127.0.0.1:5000/auth/getscreenname?oauth_token='+oauth_token_tt, true);
 						xmlHttp2.send(null);
 					},1);
 				}, 1000);
 			}
     	}
-		xmlHttp.open("GET", 'https://colon.umd.edu/qualauth/', true);
+		xmlHttp.open("GET", 'http://127.0.0.1:5000/auth/', true);
     	xmlHttp.send(null);
 	}
 });

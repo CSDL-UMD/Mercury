@@ -1,7 +1,7 @@
 import logging
 from configparser import ConfigParser
 from flask import Flask, render_template, request
-from requests_oauthlib import OAuth1Session
+from requests_oauthlib import OAuth1Session, OAuth2Session
 
 app = Flask(__name__)
 
@@ -32,8 +32,7 @@ def config(filename='database.ini', section='postgresql'):
 webInformation = config('../configuration/config.ini',
                         'webconfiguration')
 
-
-app_callback_url = str(webInformation['callback'])
+# app_callback_url = str(webInformation['callback'])
 app_callback_url_qual = str(webInformation['qualcallback'])
 request_token_url = str(webInformation['request_token_url'])
 access_token_url = str(webInformation['access_token_url'])
@@ -49,6 +48,11 @@ access_token_secret_store = {}
 
 @app.route('/auth/')
 def start():
+    """
+    Initiates the OAuth authentication process with Twitter.
+
+    :return: The OAuth token to be used for authorization.
+    """
     cred = config('../configuration/config.ini', 'twitterapp')
 
     try:
@@ -72,6 +76,11 @@ def start():
 
 @app.route('/qualcallback')
 def qualcallback():
+    """
+    Callback URL for the OAuth authentication with Twitter.
+
+    :return: A script to close the window after the authentication is completed.
+    """
     print("Callback Called!!!")
     oauth_token = request.args.get('oauth_token')
     oauth_verifier = request.args.get('oauth_verifier')
@@ -99,7 +108,7 @@ def qualcallback():
     user_id = access_token[2].split("=")[1]
     screen_name = access_token[3].split("=")[1]
 
-    # CODE HERE: saving these four values in json file and store anywhere
+    # CODE HERE: saving these four values in json file and store elsewhere (anywhere)
 
     screenname_store[oauth_token] = screen_name
     userid_store[oauth_token] = user_id

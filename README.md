@@ -5,13 +5,13 @@
   - If there are any issues, feel free to flag!
 
 - Original codes: [Rockwell Project](https://github.com/CSDL-UMD/Rockwell/tree/endlessfeed/backend/src) 
-  - Not main branch; "endlessfeed" branch is the one! 
+  - Not main branch; "**endlessfeed**" branch is the one! 
   - Or look this repository's main branch. 
 
 ---
 
 
-### 3-Legged OAuth Authentication Process:
+### 3-Legged OAuth Authentication Process (in OAuth 1.0a; original code) :
 
 - Frontend JavaScript: [backend > src > qualtrics > twitter_authentication(2).js](https://github.com/DO-WON/Group_RA_Mercury/tree/develop/backend/src/qualtrics) (embedded in Qualtrics survey platform)
 - Backend Python: [backend > src > authorizer > auth_qualtrics.py](https://github.com/DO-WON/Group_RA_Mercury/tree/develop/backend/src/authorizer)
@@ -66,3 +66,5 @@
   - Or set PYTHONPATH 
     - e.g. `PYTHONPATH=/Users/dowonkim/PycharmProjects/Group_RA_Mercury/backend/src/authorizer:$PYTHONPATH python auth_qualtrics.py`
   - Or use absolute path (but just for local testing)
+ 
+

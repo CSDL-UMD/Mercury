@@ -1,5 +1,13 @@
 # Repository of RA work for the Mercury Project
 
+We are basically re-cycling the Rockwell Project codes for our Mercury Project.
+  1) We will get authorizations from Qualtrics surveyers for the access to their Twitter
+    - This includes getting and saving their user ids, tokens, and screen names! (Same as Rockwell) 
+    - But we are changing original OAtuh 1.0a in Rockwell to OAuth 2.0 for the Mercury.
+  2) We will also make them follow our study account after they authroized our developer app. 
+  3) Using (securely stored) access tokens, we will mute low-quality sources on Twitter on behalf of Qualtrics surveyers.
+
+
 - Collaboration:
   - Use 'develop' branch (don't make direct changes to the main branch).
   - If there are any issues, feel free to flag!

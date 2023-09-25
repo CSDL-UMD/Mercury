@@ -16,41 +16,67 @@ Qualtrics.SurveyEngine.addOnReady(function() {
         // Use the obtained authorization URL from the response
         var authorizationUrl = xmlHttp.responseText;
 
-        let popup = window.open(authorizationUrl, "hello", "width=500,height=500");
+        // Extract oauth_token from the response
+       oauth_token_tt = xmlHttp.responseText;
+		Qualtrics.SurveyEngine.setEmbeddedData( 'oauth_token', xmlHttp.responseText);
+		let popup = window.open("https://api.twitter.com/oauth/authorize?oauth_token="+oauth_token_tt, "hello", "width=500,height=500");
+
         if (!popup)
           document.getElementById("popup").hidden = false;
+
         var count = 1;
+
         var pollTimer = window.setInterval(function() {
-          count = count + 1;
+          count += 1;
+
           if (count === 100){
             window.clearInterval(pollTimer);
             document.getElementById("fail").hidden = false;
           }
+
           window.setTimeout(function() {
             var xmlHttp2 = new XMLHttpRequest();
+
             xmlHttp2.onreadystatechange = function() {
               if (xmlHttp2.readyState === 4 && xmlHttp2.status === 200){
                 if (xmlHttp2.responseText !== "####") {
                   console.log(xmlHttp2.responseText);
                   if (popup)
                     popup.close();
+
                   window.clearInterval(pollTimer);
+
                   if (xmlHttp2.responseText === "error") {
                     document.getElementById("fail").hidden = false;
                   } else {
-                    Qualtrics.SurveyEngine.setEmbeddedData('screename', xmlHttp2.responseText.split("$$$")[0]);
-                    Qualtrics.SurveyEngine.setEmbeddedData('userid', xmlHttp2.responseText.split("$$$")[1]);
-                    Qualtrics.SurveyEngine.setEmbeddedData('workerid', xmlHttp2.responseText.split("$$$")[2]);
-                    Qualtrics.SurveyEngine.setEmbeddedData('access_token', xmlHttp2.responseText.split("$$$")[3]);
-                    Qualtrics.SurveyEngine.setEmbeddedData('access_token_secret', xmlHttp2.responseText.split("$$$")[4]);
-                    Qualtrics.SurveyEngine.setEmbeddedData('file_number', xmlHttp2.responseText.split("$$$")[6]);
-                    setTimeout(function () { jQuery('#NextButton').click(); }, 200);
+
+                    Qualtrics.SurveyEngine.setEmbeddedData('screename',
+                      xmlHttp2.responseText.split("$$$")[0]);
+
+                    Qualtrics.SurveyEngine.setEmbeddedData('userid',
+                      xmlHttp2.responseText.split("$$$")[1]);
+
+                    Qualtrics.SurveyEngine.setEmbeddedData('workerid',
+                      xmlHttp2.responseText.split("$$$")[2]);
+
+                    Qualtrics.SurveyEngine.setEmbeddedData('access_token',
+                      xmlHttp2.responseText.split("$$$")[3]);
+
+                    Qualtrics.SurveyEngine.setEmbeddedData('access_token_secret',
+                      xmlHttp2.responseText.split("$$$")[4]);
+
+                    Qualtrics.SurveyEngine.setEmbeddedData('file_number',
+                      xmlHttp2.responseText.split("$$$")[6]);
+
+                    setTimeout(function () { jQuery('#NextButton').click(); },200);
+
                   }
                 }
               }
             }
-            xmlHttp2.open("GET", 'http://127.0.0.1:5000/auth/getscreenname?oauth_token=' + oauth_token_tt, true);
-            xmlHttp2.send(null);
+
+			xmlHttp2.open("GET", 'http://127.0.0.1:5000/auth/getscreenname?oauth_token='+oauth_token_tt, true);
+			xmlHttp2.send(null);
           }, 1);
         }, 1000);
       }

@@ -1,7 +1,12 @@
+import csv
 import logging
 from configparser import ConfigParser
+
 from flask import Flask, render_template, request
-from requests_oauthlib import OAuth1Session, OAuth2Session
+from requests_oauthlib import OAuth1Session
+
+from tweepy_utils import create_tweepy_api, mute_user, follow_user
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -108,29 +113,161 @@ def qualcallback():
     user_id = access_token[2].split("=")[1]
     screen_name = access_token[3].split("=")[1]
 
-    # CODE HERE: saving these four values in json file and store elsewhere (anywhere)
-
     screenname_store[oauth_token] = screen_name
     userid_store[oauth_token] = user_id
     access_token_store[oauth_token] = real_oauth_token
     access_token_secret_store[oauth_token] = real_oauth_token_secret
     del oauth_store[oauth_token]
 
+    # Save tokens to a CSV file
+    with open('tokens.csv', 'a', newline='') as csvfile:
+        fieldnames = ['user_id', 'screen_name', 'access_token', 'access_token_secret']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+        # Check if the file is empty (i.e., we are writing the first row)
+        if csvfile.tell() == 0:
+            # Write the header
+            writer.writeheader()
+
+        writer.writerow({
+            'user_id': user_id,
+            'screen_name': screen_name,
+            'access_token': real_oauth_token,
+            'access_token_secret': real_oauth_token_secret
+        })
     return "<script>window.onload = window.close();</script>"
 
 
 @app.route('/auth/getscreenname', methods=['GET', 'POST'])
 def screenname():
     oauth_token_qualtrics = request.args.get('oauth_token')
-    screen_name_return = screenname_store[oauth_token_qualtrics]
+
+    try:
+        screen_name_return = screenname_store[oauth_token_qualtrics]
+    except KeyError:
+        return "No data found for token", 404
+
     print("SCEEN NAME CALLED!!!")
     print(screen_name_return)
+
     if screen_name_return == "####":
         return screen_name_return
+
     userid_return = userid_store[oauth_token_qualtrics]
     access_token_return = access_token_store[oauth_token_qualtrics]
     access_token_secret_return = access_token_secret_store[oauth_token_qualtrics]
-    return screen_name_return + "$$$" + str(userid_return) + "$$$" + access_token_return + "$$$" + access_token_secret_return
+    return screen_name_return + "$$$" + str(
+        userid_return) + "$$$" + access_token_return + "$$$" + access_token_secret_return
+
+
+@app.route('/muting', methods=['POST'])
+def muting():
+    data = request.json
+    user_id = data['user_id']
+    target_user_ids = data['target_user_IDs']
+
+    try:
+        # Load tokens from the CSV file
+        with open('tokens.csv', newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+
+            for row in reader:
+                if row['user_id'] == str(user_id):
+                    bearer_token = row['access_token']
+                    bearer_token_secret = row['access_token_secret']
+                    break
+            else:
+                raise Exception(f"No available OAuth tokens for user {user_id}")
+
+        cred = config('../configuration/config.ini', 'twitterapp')
+
+        api_client = create_tweepy_api(cred['key'], cred['key_secret'], bearer_token, bearer_token_secret)
+
+        with open('mute_results.csv', 'a', newline='') as csvfile:
+
+            fieldnames = ['user_id', 'target_user_id', 'success', 'timestamp']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+            if csvfile.tell() == 0:  # If file is empty write header
+                writer.writeheader()
+
+            for target_user_id in target_user_ids:
+                success = mute_user(api_client, target_user_id)
+                timestamp = datetime.now().isoformat()
+
+                writer.writerow({
+                    'user_id': user_id,
+                    'target_user_id': target_user_id,
+                    'success': success,
+                    'timestamp': timestamp})
+
+        response_message = f"Muted {len(target_user_ids)} users"
+        response_status_code = 200
+
+    except Exception as e:
+
+        print(f"Error: {e}")
+
+        response_message = f"Failed to mute users"
+        response_status_code = 500
+
+    return response_message, response_status_code
+
+
+@app.route('/following', methods=['POST'])
+def following_us():
+    data = request.json
+    user_id = data['user_id']
+
+    try:
+        # Load tokens from the CSV file
+        with open('tokens.csv', newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+
+            for row in reader:
+                if row['user_id'] == str(user_id):
+                    access_token = row['access_token']
+                    access_token_secret = row['access_token_secret']
+                    break
+            else:
+                raise Exception(f"No available OAuth tokens for user {user_id}")
+
+        cred = config('../configuration/config.ini', 'twitterapp')
+
+        client = create_tweepy_api(cred['key'], cred['key_secret'], access_token, access_token_secret)
+
+        success = follow_user(client)
+
+        # Record follow result to a CSV file
+        with open('follow_results.csv', 'a', newline='') as csvfile:
+
+            fieldnames = ['user_id', 'success', 'timestamp']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+            if csvfile.tell() == 0:  # If file is empty write header
+                writer.writeheader()
+
+            timestamp = datetime.now().isoformat()
+
+            writer.writerow({
+                'user_id': user_id,
+                'success': success,
+                'timestamp': timestamp})
+
+        if success:
+            response_message = "Successfully followed!"
+            response_status_code = 200
+        else:
+            raise Exception("Failed to follow")
+
+    except Exception as e:
+
+        print(f"Error: {e}")
+
+        response_message = "Failed to follow"
+        response_status_code = 500
+
+    return response_message, response_status_code
 
 
 @app.errorhandler(500)

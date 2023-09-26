@@ -5,7 +5,25 @@ Qualtrics.SurveyEngine.addOnload(function() {
 });
 
 Qualtrics.SurveyEngine.addOnReady(function() {
-  /* Place your JavaScript here to run when the page is fully displayed */
+  /*
+    This function runs when the page is fully displayed.
+
+    Step 1: Get a reference to the HTML element with id "twitter-login-btn".
+    Step 2: Assign an onclick event handler to this element. When clicked, it will perform several actions.
+            - It sends a GET request to the '/auth/' endpoint on server and retrieves an oauth_token.
+            - Opens a popup window for Twitter OAuth authorization using obtained oauth_token.
+            - If popup blocking prevents opening of new window, unhides an HTML element with id "popup".
+
+    Step 3: Starts a polling mechanism that checks every second for up to 100 seconds:
+            - If user successfully authorizes app in Twitter popup window,
+              it sends another GET request to '/auth/getscreenname' endpoint on server with oauth_token as parameter,
+              receives user's screen name, user ID and other related data from server response,
+              sets these data into Qualtrics embedded data fields,
+              then automatically clicks on next button in Qualtrics survey.
+
+            - If any error occurs during this process or if count reaches maximum limit (100),
+              it displays a failure message by unhiding an HTML element with id "fail".
+   */
 
   var element = document.getElementById("twitter-login-btn");
   element.onclick = function(event) {

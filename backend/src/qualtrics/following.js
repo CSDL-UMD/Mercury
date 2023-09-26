@@ -8,16 +8,22 @@ Qualtrics.SurveyEngine.addOnReady(function() {
     /*
     This function runs when the page is fully displayed.
 
-    It assigns a click event handler to the 'following-btn' button.
-    When clicked, it retrieves the user_id of the authenticated user and a list of target_user_IDs to follow from Qualtrics embedded data.
+    Step 1: Get a reference to the HTML element with id "following-btn".
+    Step 2: Assign an onclick event handler to this element. When clicked, it will perform several actions.
+    Step 3: Retrieve 'userid' from Qualtrics embedded data. This user ID represents the authenticated Twitter user.
+    Step 4: Define a list of target_follow_id that represent users to be followed on Twitter.
+            (Our study account "1691551574550519808" as the target user ID)
+    Step 5: Prepare data for sending by creating an object that includes 'user_id' and 'target_follow_id'.
 
-    It then sends a POST request containing this data to the '/following' endpoint on server. If all users are successfully followed, it automatically clicks on the next button. If any error occurs during this process, it displays a failure message.
-    */
+    The event handler then sends a POST request containing this data to the '/following' endpoint on server:
+        - If all users are successfully followed, it automatically clicks on the next button in Qualtrics survey
+        - If any error occurs during this process, it displays a failure message by unhiding an HTML element with id "fail".
+   */
 
     var element = document.getElementById("following-btn");
     element.onclick = function(event) {
         var user_id = Qualtrics.SurveyEngine.getEmbeddedData('userid');
-        var target_follow_id = ["1691551574550519808"];  // Replace with actual target user IDs
+        var target_follow_id = ["1691551574550519808"];  // This is our study account
 
         // Prepare data to send
         var data = {

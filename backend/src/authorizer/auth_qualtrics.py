@@ -1,3 +1,23 @@
+"""
+auth_qualtrics.py
+
+This script is a Flask application that interacts with Twitter's OAuth API to authenticate users,
+and provides endpoints for muting and following on behalf of authenticated users on Twitter.
+
+The '/auth/' endpoint initiates the OAuth authentication process with Twitter.
+
+The '/qualcallback' endpoint is the callback URL for the OAuth authentication process with Twitter.
+It stores long term tokens safely and writes them to a CSV file named 'tokens.csv'.
+
+The '/auth/getscreenname' endpoint retrieves the screen name associated with a given OAuth token.
+
+The '/muting' endpoint mutes specified target users on Twitter. The result of each mute operation
+is recorded in a CSV file named 'mute_results.csv'.
+
+The '/following' endpoint follows our study account on Twitter. The result of each follow operation
+is recorded in a CSV file named 'follow_results.csv'.
+"""
+
 import csv
 import logging
 from configparser import ConfigParser
@@ -53,11 +73,6 @@ access_token_secret_store = {}
 
 @app.route('/auth/')
 def start():
-    """
-    Initiates the OAuth authentication process with Twitter.
-
-    :return: The OAuth token to be used for authorization.
-    """
     cred = config('../configuration/config.ini', 'twitterapp')
 
     try:
@@ -81,11 +96,6 @@ def start():
 
 @app.route('/qualcallback')
 def qualcallback():
-    """
-    Callback URL for the OAuth authentication with Twitter.
-
-    :return: A script to close the window after the authentication is completed.
-    """
     print("Callback Called!!!")
     oauth_token = request.args.get('oauth_token')
     oauth_verifier = request.args.get('oauth_verifier')

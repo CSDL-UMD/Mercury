@@ -1,4 +1,23 @@
-# tweepy_utils.py
+"""
+tweepy_utils.py
+
+A utility module for interacting with the Twitter API using Tweepy.
+
+This module provides functions to create a Tweepy client or API object, mute a user, and follow a user on Twitter.
+
+Functions:
+    create_tweepy_client(access_token: str) -> tweepy.Client
+        Creates a Tweepy client using the provided access token.
+
+    create_tweepy_api(consumer_key: str, consumer_secret: str, access_token: str, access_token_secret: str) -> tweepy.API
+        Creates a Tweepy API object using the provided keys and tokens.
+
+    mute_user(api: tweepy.API, target_user_id: Union[str, int]) -> bool
+        Mutes a user on Twitter using the given Tweepy API object and user ID.
+
+    follow_user(api: tweepy.API) -> bool
+        Follows a specific user (=our study account) on Twitter using the given Tweepy API object.
+"""
 
 import tweepy
 
@@ -69,7 +88,7 @@ def mute_user(client, target_user_id):
 
 def follow_user(client):
     """
-    Follow a specific user on Twitter using the given Tweepy client.
+    Follow our study account on Twitter using the given Tweepy client.
 
     Args:
         client: tweepy.Client object

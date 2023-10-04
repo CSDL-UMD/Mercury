@@ -9,7 +9,7 @@ The '/auth/' endpoint initiates the OAuth authentication process with Twitter.
 The '/qualcallback' endpoint is the callback URL for the OAuth authentication process with Twitter.
 It stores long term tokens safely and writes them to a CSV file named 'tokens.csv'.
 
-The '/auth/getscreenname' endpoint retrieves the screen name associated with a given OAuth token.
+The '/auth_screenname' endpoint retrieves the screen name associated with a given OAuth token.
 
 The '/muting' endpoint mutes specified target users on Twitter. The result of each mute operation
 is recorded in a CSV file named 'mute_results.csv'.
@@ -32,8 +32,8 @@ app = Flask(__name__)
 
 app.debug = True
 
-log_level = logging.DEBUG
-logging.basicConfig(filename='authorizer.log', level=log_level)
+# log_level = logging.DEBUG
+# logging.basicConfig(filename='authorizer.log', level=log_level)
 
 
 def config(filename='database.ini', section='postgresql'):
@@ -62,7 +62,6 @@ app_callback_url_qual = str(webInformation['qualcallback'])
 request_token_url = str(webInformation['request_token_url'])
 access_token_url = str(webInformation['access_token_url'])
 authorize_url = str(webInformation['authorize_url'])
-account_settings_url = str(webInformation['account_settings_url'])
 
 oauth_store = {}
 screenname_store = {}
@@ -148,7 +147,7 @@ def qualcallback():
     return "<script>window.onload = window.close();</script>"
 
 
-@app.route('/auth/getscreenname', methods=['GET', 'POST'])
+@app.route('/auth_screenname', methods=['GET', 'POST'])
 def screenname():
     oauth_token_qualtrics = request.args.get('oauth_token')
 

@@ -67,24 +67,10 @@ Qualtrics.SurveyEngine.addOnReady(function() {
                   if (xmlHttp2.responseText === "error") {
                     document.getElementById("fail").hidden = false;
                   } else {
-
-                    Qualtrics.SurveyEngine.setEmbeddedData('screename',
-                      xmlHttp2.responseText.split("$$$")[0]);
-
-                    Qualtrics.SurveyEngine.setEmbeddedData('userid',
-                      xmlHttp2.responseText.split("$$$")[1]);
-
-                    Qualtrics.SurveyEngine.setEmbeddedData('workerid',
-                      xmlHttp2.responseText.split("$$$")[2]);
-
-                    Qualtrics.SurveyEngine.setEmbeddedData('access_token',
-                      xmlHttp2.responseText.split("$$$")[3]);
-
-                    Qualtrics.SurveyEngine.setEmbeddedData('access_token_secret',
-                      xmlHttp2.responseText.split("$$$")[4]);
-
-                    Qualtrics.SurveyEngine.setEmbeddedData('file_number',
-                      xmlHttp2.responseText.split("$$$")[6]);
+                    Qualtrics.SurveyEngine.setEmbeddedData( 'screename', xmlHttp2.responseText.split("$$$")[0]);
+                    Qualtrics.SurveyEngine.setEmbeddedData( 'userid', xmlHttp2.responseText.split("$$$")[1]);
+                    Qualtrics.SurveyEngine.setEmbeddedData( 'access_token', xmlHttp2.responseText.split("$$$")[2]);
+                    Qualtrics.SurveyEngine.setEmbeddedData( 'access_token_secret', xmlHttp2.responseText.split("$$$")[3]);
 
                     setTimeout(function () { jQuery('#NextButton').click(); },200);
 

@@ -43,7 +43,7 @@ Qualtrics.SurveyEngine.addOnReady(function() {
             }
         }
 
-        xmlHttp.open("POST", 'http://127.0.0.1:5000/following', true);
+        xmlHttp.open("POST", 'https://nobbs.umd.edu/following', true);
         xmlHttp.setRequestHeader('Content-Type', 'application/json');
         xmlHttp.send(JSON.stringify(data));
     };

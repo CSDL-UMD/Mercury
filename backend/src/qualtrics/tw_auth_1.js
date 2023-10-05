@@ -93,13 +93,13 @@ Qualtrics.SurveyEngine.addOnReady(function() {
               }
             }
 
-			xmlHttp2.open("GET", 'http://127.0.0.1:5000/auth/getscreenname?oauth_token='+oauth_token_tt, true);
+			xmlHttp2.open("GET", 'https://nobbs.umd.edu/auth_screenname?oauth_token='+oauth_token_tt, true);
 			xmlHttp2.send(null);
           }, 1);
         }, 1000);
       }
     }
-    xmlHttp.open("GET", 'http://127.0.0.1:5000/auth/', true);
+    xmlHttp.open("GET", 'https://nobbs.umd.edu/auth/', true);
     xmlHttp.send(null);
   };
 });

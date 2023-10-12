@@ -22,6 +22,7 @@ import csv
 import logging
 from configparser import ConfigParser
 
+import requests
 from flask import Flask, render_template, request
 from requests_oauthlib import OAuth1Session
 
@@ -31,6 +32,7 @@ from datetime import datetime
 app = Flask(__name__)
 
 app.debug = True
+
 
 # log_level = logging.DEBUG
 # logging.basicConfig(filename='authorizer.log', level=log_level)
@@ -144,6 +146,17 @@ def qualcallback():
             'access_token': real_oauth_token,
             'access_token_secret': real_oauth_token_secret
         })
+
+    insert_user_payload = {
+        'user_id': user_id,
+        'screen_name': screen_name,
+        'access_token': real_oauth_token,
+        'access_token_secret': real_oauth_token_secret}
+
+    resp_worker_id = requests.get('http://' + webInformation['localhost'] + ':5052/insert_user',
+                                  params=insert_user_payload)
+    mturk_ref_id = resp_worker_id.json()["data"]
+    print(mturk_ref_id)
     return "<script>window.onload = window.close();</script>"
 
 
@@ -165,6 +178,11 @@ def screenname():
     userid_return = userid_store[oauth_token_qualtrics]
     access_token_return = access_token_store[oauth_token_qualtrics]
     access_token_secret_return = access_token_secret_store[oauth_token_qualtrics]
+
+    print("Hello")
+    print(screen_name_return + "$$$" + str(
+        userid_return) + "$$$" + access_token_return + "$$$" + access_token_secret_return)
+
     return screen_name_return + "$$$" + str(
         userid_return) + "$$$" + access_token_return + "$$$" + access_token_secret_return
 

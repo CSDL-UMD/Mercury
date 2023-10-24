@@ -74,8 +74,8 @@ def mute_user(client, target_user_id):
      """
     try:
         # Use the Tweepy Client to mute the user
-        response = client.mute(target_user_id=target_user_id)
-
+        response = client.mute(target_user_id=target_user_id, user_auth=False)
+        print(response)
         print(f"Successfully muted {target_user_id}")
 
         return True
@@ -96,17 +96,35 @@ def follow_user(client):
     Returns:
         success: bool, True if the user was successfully followed; False otherwise.
      """
-    target_follow_id = "1691551574550519808"      # Mercury study account!
+    target_follow_id = "1691551574550519808"  # Mercury study account!
 
     try:
         # Use the Tweepy Client to follow the user
-        response = client.follow_user(target_user_id=target_follow_id)
-
+        # print(client.get_users_followers())
+        response = client.follow_user(target_user_id=target_follow_id, user_auth=False)
+        print(response)
         print(f"Successfully followed {target_follow_id}")
 
         return True
 
     except Exception as e:
-        print(f"Error while following {target_user_id}: {e}")
+        print(f"Error while following {target_follow_id}: {e}")
 
+        return False
+
+
+def get_muted(client):
+    """
+    Get muted users of a tweepy client. Returns None if there are no muted users
+    """
+    user_id = client.get_me(user_auth=False).data.id
+    try:
+        # Use the Tweepy Client to follow the user
+
+        response = client.get_muted(user_auth=False)
+
+        print(f"Muted users of {user_id}: {response}")
+        return True
+    except Exception as e:
+        print(f"Error while getting muted accounts of {user_id}: {e}")
         return False

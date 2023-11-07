@@ -11,8 +11,7 @@ MAX = 100
 universal_buffer = []
 params = config('../configuration/config.ini', 'postgresql_local')
 accessPool = psycopg2.pool.SimpleConnectionPool(MIN, MAX, host=params["host"], database=params["database"],
-                                                user=params["user"], password=params["password"], port=params[
-        "port"])  # Maybe make 2 pools and half the functions use each or make this one huge.
+                                                user=params["user"], password=params["password"], port=params["port"])  # Maybe make 2 pools and half the functions use each or make this one huge.
 print("Access Pool object")
 print(accessPool)
 app = Flask(__name__)
@@ -89,7 +88,8 @@ def get_access_token():
             access_token = result[0]
             access_token_secret = result[1]
             return jsonify({"access_token": access_token, "access_token_secret": access_token_secret})
-
+        cursor.close()
+        accessPool.putconn(connection)
     return jsonify({"error": f"No available OAuth tokens for user {user_id}"}), 404
 
 

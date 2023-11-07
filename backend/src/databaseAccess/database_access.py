@@ -137,6 +137,95 @@ def store_following():
     return jsonify(data=retVal123)
 
 
+@app.route('/store_randomized_group', methods=['GET'])
+def store_randomized_group():
+    retVal123 = -1
+
+    sql_insert = """INSERT INTO randomized_group (user_id, randomized_group) VALUES(%s,%s);"""
+
+    try:
+        connection = accessPool.getconn()
+        if connection is not False:
+            user_id = request.args.get('user_id')
+            randomized_group = request.args.get('randomized_group')
+            cursor = connection.cursor()
+
+            # Insert new user
+            cursor.execute(sql_insert, (user_id, randomized_group))
+            print("Randomized Group inserted successfully.")
+            cursor.close()
+
+            connection.commit()
+            accessPool.putconn(connection)
+            return jsonify(data=user_id)
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        print("ERROR!!!!", error)
+
+    return jsonify(data=retVal123)
+
+
+@app.route('/store_mute_state', methods=['GET'])
+def store_mute_state():
+    retVal123 = -1
+
+    sql_insert = """INSERT INTO mute_group (user_id, state) VALUES(%s,%s);"""
+    sql_update = """UPDATE mute_group SET state = %s WHERE user_id = %s;"""
+
+    try:
+        connection = accessPool.getconn()
+        if connection is not False:
+            user_id = request.args.get('user_id')
+            state = request.args.get('state')
+            cursor = connection.cursor()
+
+            # Check if the user already exists in the database
+            cursor.execute("SELECT COUNT(*) FROM mute_group WHERE user_id=%s;", (user_id,))
+            count_exists = cursor.fetchone()[0]
+            print("here123")
+            print(count_exists)
+            if count_exists > 0:
+                # Update existing user
+                cursor.execute(sql_update, (state, user_id))
+                print("Mute state updated successfully.")
+            else:
+                # Insert new user
+                cursor.execute(sql_insert, (user_id, state))
+                print("Mute state inserted successfully.")
+
+            cursor.close()
+
+            connection.commit()
+            accessPool.putconn(connection)
+            return jsonify(data=user_id)
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        print("ERROR!!!!", error)
+
+    return jsonify(data=retVal123)
+
+
+@app.route('/get_mute_state', methods=['GET'])
+def get_mute_state():
+    # Connect to the database and fetch state for all users where state is "New"
+    try:
+        connection = accessPool.getconn()
+        if connection is not False:
+            cursor = connection.cursor()
+            cursor.execute("SELECT user_id FROM mute_group WHERE state='New';")
+            result = cursor.fetchall()
+
+            new_users = [item[0] for item in result]
+            cursor.close()
+            connection.commit()
+            accessPool.putconn(connection)
+
+            return jsonify({"new_users": new_users})
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        return jsonify({"error": str(error)})
+
+
 @app.after_request
 def add_headers(response):
     response.headers.add('Access-Control-Allow-Origin', '*')

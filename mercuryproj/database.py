@@ -22,6 +22,7 @@ accessPool = psycopg2.pool.ThreadedConnectionPool(MIN, MAX, host=db_params["host
                                                   password=db_params["password"],
                                                   port=db_params["port"])
 
+
 logging.info(f'Connected to DB at host: {db_params["host"]}:{db_params["port"]}, database: {db_params["database"]}')
 
 

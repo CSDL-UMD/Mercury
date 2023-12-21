@@ -1,0 +1,3 @@
+include mercuryproj/data/*.csv
+include mercuryproj/data/*.json
+include mercuryproj/dm/*.csv

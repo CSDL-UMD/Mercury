@@ -1,2 +1,0 @@
-# The Mercury Project
-

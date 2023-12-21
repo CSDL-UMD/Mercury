@@ -1,0 +1,36 @@
+[project]
+name = "mercuryproj"
+version = "0.0.1"
+authors = [
+    { name="Do Won Kim", email="dowonkim@umd.edu" },
+    { name="Giovanni Luca Ciampaglia", email="gciampag@umd.edu" },
+    { name="Justin Pratama", email="jpratama@terpmail.umd.edu" },
+    { name="Dhruva Rayasam", email="drayasam@terpmail.umd.edu" }
+]
+description = "Backend API and scripts for the 'Muting low-quality sources' project of the Mercury Project research consortium."
+dependencies = [
+    "flask",
+    "tweepy",
+    "pandas",
+    "requests",
+    "requests-oauthlib",
+    "gunicorn[gevent]"
+]
+readme = "README.md"
+requires-python = ">=3.10"
+# classifiers = [
+#    "Programming Language :: Python :: 3",
+#    "License :: OSI Approved :: MIT License",
+#    "Operating System :: OS Independent",
+# ]
+
+[project.urls]
+Homepage = "https://github.com/CSDL-UMD/Mercury"
+Issues = "https://github.com/CSDL-UMD/Mercury/issues"
+
+[tool.setuptools]
+# packages = ["mercuryproj"]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]

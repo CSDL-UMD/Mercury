@@ -5,19 +5,19 @@ and performs certain actions on behalf of the authenticated users.
 It provides following functionalities:
 """
 
+import time
+from importlib.resources import files
+
+from requests_oauthlib import OAuth1Session
+
 import json
 import logging
 import os
-import random
-import time
-from datetime import datetime
-from importlib.resources import files
-
 import pandas as pd
-import requests
+import random
 import tweepy
-from flask import render_template, request, Blueprint, url_for
-from requests_oauthlib import OAuth1Session
+from datetime import datetime
+from flask import render_template, request, Blueprint
 
 from . import database
 from .configuration import configuration
@@ -185,10 +185,7 @@ def following():
     Wave 1
     """
     user_id = request.args.get('user_id')
-
-    # Get access token from DB via /get_access_token route
-    response = requests.get(url_for('database.get_access_token', _external=True),
-                            params={'user_id': user_id})
+    response = database.get_access_token(user_id)
     access_token_response = response.json()
     print("access_token_response:")
     print(access_token_response)
@@ -238,10 +235,7 @@ def following():
         "success": success,
         "session_start": timestamp
     }
-
-    requests.get(url_for('database.store_following', _external=True),
-                 params=insert_following_payload)
-
+    database.store_following(**insert_following_payload)
     response_message = "Successfully followed!"  # return this anyway to turn the page
     return response_message
 
@@ -324,11 +318,9 @@ def store_group():
     insert_group_payload = {
         "user_id": user_id,
         "randomized_group": randomized_group,
-        "timestamp": current_timestamp
+        "session_start": current_timestamp
     }
-    requests.get(url_for('database.store_randomized_group', _external=True),
-                 params=insert_group_payload)
-
+    database.store_randomized_group(**insert_group_payload)
     return "Stored Randomized Groups with Timestamp"
 
 
@@ -343,43 +335,33 @@ def mute_group():
     """
     user_id = request.args.get("user_id").strip()
     state = request.args.get("state").strip()
-
     # store in DB:
     insert_group_payload = {
         "user_id": user_id,
         "state": state
     }
-    requests.get(url_for('database.store_mute_state', _external=True),
-                 params=insert_group_payload)
+    database.store_mute_state(**insert_group_payload)
+    # retrieve low quality accounts inventory
     inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")))
     inventory = inventory.sort_values(by='followers', ascending=False)
-
     num_groups = len(inventory) // 10
-
     muted_list = []
-
-    end_idx = 311
-
+    end_idx = 311       # initial number
     for j in range(num_groups):
         # Select each group of 10 accounts and sample a fraction without replacement
         start_idx = j * 10
         end_idx = (j + 1) * 10
-
         group_df = inventory.iloc[start_idx:end_idx]
-
         sample_df = group_df.sample(frac=0.7, replace=False)
         muted_list.extend(sample_df.to_dict('records'))
-
     # If we have not reached the total samples, add more from the remaining data
     while len(muted_list) < 219:
         remaining_samples = 219 - len(muted_list)
         remaining_df = inventory.iloc[end_idx:]  # Remaining data after the last group
         extra_samples = remaining_df.sample(n=min(len(remaining_df), remaining_samples), replace=False)
         muted_list.extend(extra_samples.to_dict('records'))
-
     # Set the directory where the files will be saved
     directory = "/home/ubuntu/mercury-develop/data/muting_job"
-
     # Save the result to a JSON file per user:
     with open(os.path.join(directory, f"muted_accounts_for_{user_id}.json"), 'w') as f:
         f.write(json.dumps(muted_list, indent=4))
@@ -394,9 +376,7 @@ def get_userid():
     """
     vsid = request.args.get("vsid")
     print(vsid)
-    # Get access token from DB via /get_access_token route
-    response = requests.get(url_for('database.get_user_info', _external=True),
-                            params={'vsid': vsid})
+    response = database.get_user_info(vsid)
     user_info = response.json()
     print(user_info)
     return str(user_info)
@@ -413,8 +393,7 @@ def get_group():
     insert_group_payload = {
         "user_id": user_id,
     }
-    randomized_group_info = requests.get(url_for('database.get_randomized_group', _external=True), params=insert_group_payload)
-
+    randomized_group_info = database.get_randomized_group(**insert_group_payload)
     return str(randomized_group_info)
 
 
@@ -424,21 +403,10 @@ def follow_politifact():
     In Wave 3, if respondents click the follow button, we follow @PolitiFact on behalf of them.
     """
     user_id = request.args.get("user_id").strip()
-
-    # Get access token from DB via /get_access_token route
-    response = requests.get(url_for("database.get_access_token", _external=True), params={'user_id': user_id})
-
-    access_token_response = response.json()
-    print("access_token_response:")
-    print(access_token_response)
-
-    if 'error' in access_token_response:
-        raise Exception(access_token_response['error'])
-
-    # Store the user's tokens
+    response = database.get_access_token(user_id)
+    access_token_response = response.jso
     access_token = access_token_response['access_token']
     access_token_secret = access_token_response['access_token_secret']
-
     # make a tweepy client
     client = tweepy.Client(
         consumer_key=cred['key'],
@@ -446,10 +414,8 @@ def follow_politifact():
         access_token=access_token,
         access_token_secret=access_token_secret,
         return_type=dict)
-
     # target_follow_id: @PolitiFact
     target_follow_id = "8953122"
-
     # Try the following
     success = False
     for attempt in range(3):  # Try up to 3 times
@@ -467,19 +433,15 @@ def follow_politifact():
     # If all attempts failed and success is still False, assign response to success.
     if not success:
         success = "Failed"
-
     # log the time
     timestamp = datetime.now().isoformat()
-
     # store in DB:
     insert_following_payload = {
         "user_id": user_id,
         "success": success,
         "session_start": timestamp
     }
-
-    requests.get(url_for('database.store_follow_politifact', _external=True), params=insert_following_payload)
-
+    database.store_follow_politifact(**insert_following_payload)
     response_message = "Successfully followed!"  # return this anyway to turn the page
     return response_message
 
@@ -493,8 +455,7 @@ def get_exposure():
 
     # Get randomized group
     insert_group_payload = {"user_id": user_id}
-    randomized_group_response = requests.get(url_for('database.get_randomized_group', _external=True),
-                                             params=insert_group_payload)
+    randomized_group_response = database.get_randomized_group(**insert_group_payload)
     randomized_group = randomized_group_response.text
 
     top_10 = ["CGTNOfficial", "XHNews", "TuckerCarlson", "PDChina", "SeanHannity", "wikileaks",

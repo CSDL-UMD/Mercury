@@ -11,35 +11,18 @@ Automation from 6 days after the start of Wave 2:
 import json
 import os
 import pandas as pd
-import requests
 import tweepy
-from configparser import ConfigParser
 from datetime import datetime, timedelta
-from flask import Blueprint, url_for
+from flask import Blueprint
+
+from . import database
+from .configuration import configuration
 
 bp = Blueprint("compliance", __name__, url_prefix="/compliance")
 
 
-def config(filename='database.ini', section='postgresql'):
-    # create a parser
-    parser = ConfigParser()
-    # read config file
-    parser.read(filename)
-
-    # get section, default to postgresql
-    db = {}
-    if parser.has_section(section):
-        params = parser.items(section)
-        for param in params:
-            db[param[0]] = param[1]
-    else:
-        raise Exception('Section {0} not found in the {1} file'.format(section, filename))
-
-    return db
-
-
-# put the full path in this module
-webInformation = config('/home/ubuntu/mercury-develop/config.ini', 'webconfiguration')
+webInformation = configuration['webconfiguration']
+cred = configuration['twitterapp']
 
 
 dm1_text = """We are writing to remind you about these tips that will help you to better evaluate the headlines you see on social media. Please read the information below carefully. We will invite you to take part in our next survey in approximately three weeks.
@@ -147,13 +130,11 @@ def dm1():
     """
     This function retrieves newly updated users (from a week ago), and send DMs to these users.
     """
-    user_ids_list = requests.get(url_for('database.get_users_from_week', _external=True))
+    user_ids_list = database.get_users_from_week()
     user_list = user_ids_list.json()
     print(user_list)
 
     # Make a client for DM
-    cred = config('/home/ubuntu/mercury-develop/config.ini', 'twitterapp')
-
     client_dm = tweepy.Client(
         consumer_key=cred['key'],
         consumer_secret=cred['key_secret'],
@@ -165,11 +146,8 @@ def dm1():
     # For each user, iterate the following:
     for user_id in user_list:
         # Get each user's randomized group info
-        insert_group_payload = {"user_id": user_id}
-        randomized_group_info = requests.get(url_for('database.get_randomized_group', _external=True),
-                                             params=insert_group_payload)
+        randomized_group_info = database.get_randomized_group(user_id=user_id)
         response = randomized_group_info.json()
-
         # If the user is in media_literacy group, send dm1_text
         if response == "media_literacy":
             text = dm1_text
@@ -217,8 +195,6 @@ def dm1():
 def dm2():
     file_path = '/home/ubuntu/mercury-develop/mercuryproj/dm/dm1.csv'
     dm1_list = pd.read_csv(file_path)
-
-    cred = config('/home/ubuntu/mercury-develop/config.ini', 'twitterapp')
 
     client_dm = tweepy.Client(
         consumer_key=cred['key'],
@@ -281,7 +257,6 @@ def dm2():
 def dm3():
     file_path = '/home/ubuntu/mercury-develop/mercuryproj/dm/dm2.csv'
     dm2_list = pd.read_csv(file_path)
-    cred = config('/home/ubuntu/mercury-develop/config.ini', 'twitterapp')
 
     client_dm = tweepy.Client(
         consumer_key=cred['key'],
@@ -345,25 +320,19 @@ def dm3():
 
 def mute_compliance():
     # Retrieve mute state: compliance check only for "Done"
-    users = requests.get(url_for('database.get_mute_state', _external=True)).json()
+    users = database.get_mute_state().json()
     all_users_state = users.get("users_state", [])
     user_ids = [user_info["user_id"] for user_info in all_users_state if user_info["state"] == "Done"]
 
     for user_id in user_ids:
         print(user_id)
-        response = requests.get(url_for('database.get_access_token', _external=True),
-                                params={'user_id': user_id})
+        response = database.get_access_token(user_id=user_id)
         access_token_response = response.json()
-
         if 'error' in access_token_response:
             raise Exception(access_token_response['error'])
-
         # Store the user's tokens
         access_token = access_token_response['access_token']
         access_token_secret = access_token_response['access_token_secret']
-
-        cred = config('/home/ubuntu/mercury-develop/config.ini', 'twitterapp')
-
         # Make a tweepy client
         client = tweepy.Client(
             consumer_key=cred['key'],
@@ -373,7 +342,6 @@ def mute_compliance():
             return_type=dict,
             wait_on_rate_limit=True
         )
-
         muted_response = client.get_muted()
         muted_list = [muted_response.data[i].id for i in range(muted_response.meta['result_count'])]
         num_muted = muted_response.meta['result_count']
@@ -384,7 +352,6 @@ def mute_compliance():
             "num_muted": num_muted,
             "timestamp": time_day
         }
-
         # Bring the most recent compliance file
         directory = "/home/ubuntu/mercury-develop/data/muting_job/compliance"
         file_list = [f for f in os.listdir(directory) if f.startswith(f"file_{user_id}_")]

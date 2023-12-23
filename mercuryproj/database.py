@@ -13,7 +13,12 @@ MIN = 5
 MAX = 100   # tune this number - double check whether colon actually allows 100 connections
 universal_buffer = []
 
-db_params = configuration['postgresql_local']
+try:
+    db_params = configuration['postgresql_local']
+except KeyError:
+    logging.error("Could not find configuration for database")
+    import sys
+    sys.exit(1)
 
 # TODO: Make sure that gunicorn workers share the same access pool
 accessPool = psycopg2.pool.ThreadedConnectionPool(MIN, MAX, host=db_params["host"],

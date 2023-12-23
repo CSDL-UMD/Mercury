@@ -1,2 +1,5 @@
 .python-version
 .venv
+*.egg-info/
+__pycache__
+.*.swp

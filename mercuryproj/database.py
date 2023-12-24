@@ -7,6 +7,7 @@ from flask import g, jsonify, current_app
 
 from .configuration import configuration
 
+
 def getdb():
     if 'db' not in g:
         try:
@@ -53,12 +54,12 @@ def init_app(app):
     app.cli.add_command(initdb_command)
 
 
-def insert_user(user_id, screen_name, access_token, access_token_secret, session_start):
+def insert_user(user_id, screen_name, access_token, access_token_secret, oauth_token, session_start):
     """ insert a new user into the mercury_user table """
-    logging.info(f"Insert user: {user_id=}, {screen_name=}, {access_token=}, {access_token_secret=}, {session_start=}")
-    sql_insert = """INSERT INTO mercury_user(user_id, screen_name, access_token, access_token_secret, session_start)
-             VALUES(%s,%s,%s,%s,%s);"""
-    sql_update = """UPDATE mercury_user SET screen_name = %s, access_token = %s, access_token_secret = %s, session_start = %s WHERE user_id = %s;"""
+    logging.info(f"Insert user: {user_id=}, {screen_name=}, {session_start=}")
+    sql_insert = """INSERT INTO mercury_user(user_id, screen_name, access_token, access_token_secret, oauth_token, session_start)
+             VALUES(%s,%s,%s,%s,%s,%s);"""
+    sql_update = """UPDATE mercury_user SET screen_name = %s, access_token = %s, access_token_secret = %s, oauth_token = %s, session_start = %s WHERE user_id = %s;"""
     connection = getdb()
     cursor = connection.cursor()
     # Check if the user already exists in the database
@@ -67,15 +68,80 @@ def insert_user(user_id, screen_name, access_token, access_token_secret, session
     if count_exists > 0:
         # Update existing user
         cursor.execute(sql_update,
-                       (screen_name, access_token, access_token_secret, session_start, user_id))
+                       (screen_name, access_token, access_token_secret, oauth_token, session_start, user_id))
         logging.info(f"Existing user updated successfully: {user_id=}")
     else:
         # Insert new user
         cursor.execute(sql_insert,
-                       (user_id, screen_name, access_token, access_token_secret, session_start))
+                       (user_id, screen_name, access_token, oauth_token, access_token_secret, session_start))
         logging.info(f"New user inserted successfully: {user_id=}")
     cursor.close()
     connection.commit()
+
+
+def auth_temp(oauth_token, oauth_token_secret):
+    logging.info(f"Insert temporary oauth tokens: {oauth_token=}, {oauth_token_secret=}")
+    sql_insert = """INSERT INTO auth_temp(oauth_token, oauth_token_secret) VALUES(%s,%s);"""
+    connection = getdb()
+    cursor = connection.cursor()
+    cursor.execute(sql_insert, (oauth_token, oauth_token_secret))
+    logging.info(f"Temporary oauth tokens inserted successfully: {oauth_token=}, {oauth_token_secret=}")
+    cursor.close()
+    connection.commit()
+
+
+def get_oauth_token_secret(oauth_token):
+    logging.info(f"Retrieving oauth_token_secret for: {oauth_token=}")
+    sql_query = """SELECT oauth_token_secret FROM auth_temp WHERE oauth_token = %s;"""
+    connection = getdb()
+    cursor = connection.cursor()
+    # Execute the query
+    cursor.execute(sql_query, (oauth_token,))
+    # Fetch one record
+    result = cursor.fetchone()
+    if result:
+        oauth_token_secret = result[0]
+        logging.info(f"Retrieved oauth_token_secret successfully for: {oauth_token=}")
+        return oauth_token_secret
+    else:
+        logging.warning(f"No matching oauth_token_secret found for: {oauth_token=}")
+    cursor.close()
+
+
+def get_user_details(oauth_token_qualtrics):
+    """
+    Getting user details for screen name checking
+    """
+    sql_query = """SELECT user_id, screen_name, access_token, access_token_secret FROM mercury_user WHERE oauth_token = %s;"""
+    connection = getdb()
+    cursor = connection.cursor()
+    cursor.execute(sql_query, (oauth_token_qualtrics,))
+    # Fetch one record
+    result = cursor.fetchone()
+    if result:
+        return {
+            "user_id": result[0],
+            "screen_name": result[1],
+            "access_token": result[2],
+            "access_token_secret": result[3]
+        }
+    else:
+        logging.info(f"Getting user details for: {oauth_token_qualtrics=} failed")
+    cursor.close()
+
+
+def delete_auth_temp(oauth_token):
+    """
+    Delete temporary tokens from auth_temp table
+    """
+    logging.info(f"Deleting auth_temp entry for {oauth_token=}")
+    sql_delete = """DELETE FROM auth_temp WHERE oauth_token = %s;"""
+    connection = getdb()
+    cursor = connection.cursor()
+    cursor.execute(sql_delete, (oauth_token,))
+    connection.commit()
+    logging.info(f"Deleted auth_temp entry for {oauth_token=}")
+    cursor.close()
 
 
 def get_access_token(user_id):
@@ -189,7 +255,7 @@ def store_mute_state(user_id, state):
         # Insert new user
         cursor.execute(sql_insert, (user_id, state))
         logging.info(f"Mute {state=} inserted successfully for {user_id=}")
-    cursor.cloe()
+    cursor.close()
 
     connection.commit()
     return jsonify(data=user_id)

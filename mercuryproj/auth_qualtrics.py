@@ -79,7 +79,6 @@ def process_user_id(user_id):
 def auth_start():
     """
     Initiates the OAuth 1.0a authentication process with Twitter.
-
     :return: oauth_token sent to the Qualtrics survey
     """
     content = []
@@ -94,15 +93,19 @@ def auth_start():
     data_tokens = content.text.split("&")
 
     print(data_tokens)
-    # save oauth_token (=key), oauth_token_secret
     oauth_token = data_tokens[0].split("=")[1]
     oauth_token_secret = data_tokens[1].split("=")[1]
-    oauth_store[oauth_token] = oauth_token_secret
+    # oauth_store[oauth_token] = oauth_token_secret
     screenname_store[oauth_token] = "####"
+    # save oauth_token(=key) and oauth_token_secret to DB
+    insert_auth_payload = {
+        'oauth_token': oauth_token,
+        'oauth_token_secret': oauth_token_secret,
+    }
+    database.auth_temp(**insert_auth_payload)
     return oauth_token
 
 
-# temporary token - store in DB and retrieve
 @bp.route('/qualcallback')
 def qualcallback():
     """
@@ -110,7 +113,6 @@ def qualcallback():
     """
     print("Callback Called!!!")
     oauth_token = request.args.get('oauth_token')
-    # using this as the key,
     oauth_verifier = request.args.get('oauth_verifier')
     oauth_denied = request.args.get('denied')
 
@@ -118,9 +120,10 @@ def qualcallback():
         if oauth_denied in oauth_store:
             del oauth_store[oauth_denied]
         return "<script>window.onload = window.close();</script>"
-    # retrieve oauth_token_secret from DB
-    oauth_token_secret = oauth_store[oauth_token]
 
+    # Retrieve oauth_token_secret from DB using oauth_token as the key
+    oauth_token_secret = database.get_oauth_token_secret(oauth_token)
+    print(oauth_token_secret)
     oauth_access_tokens = OAuth1Session(client_key=cred['key'], client_secret=cred['key_secret'],
                                         resource_owner_key=oauth_token, resource_owner_secret=oauth_token_secret,
                                         verifier=oauth_verifier)
@@ -134,13 +137,12 @@ def qualcallback():
     user_id = access_token[2].split("=")[1]
     screen_name = access_token[3].split("=")[1]
 
-    screenname_store[oauth_token] = screen_name
-    userid_store[oauth_token] = user_id
-    access_token_store[oauth_token] = real_oauth_token
-    access_token_secret_store[oauth_token] = real_oauth_token_secret
-    del oauth_store[oauth_token]
+    # screenname_store[oauth_token] = screen_name
+    # userid_store[oauth_token] = user_id
+    # access_token_store[oauth_token] = real_oauth_token
+    # access_token_secret_store[oauth_token] = real_oauth_token_secret
+    # del oauth_store[oauth_token]
     print(real_oauth_token)
-    # once done, delete the row in DB (new table for temporary)
     timestamp = datetime.now().isoformat()
 
     insert_user_payload = {
@@ -148,35 +150,40 @@ def qualcallback():
         'screen_name': screen_name,
         'access_token': real_oauth_token,
         'access_token_secret': real_oauth_token_secret,
+        'oauth_token': oauth_token,
         'session_start': timestamp
     }
     database.insert_user(**insert_user_payload)
+
+    # once done, delete the temporary tokens in DB
+    database.delete_auth_temp(oauth_token)
     return "<script>window.onload = window.close();</script>"
 
 
 @bp.route('/auth_screenname', methods=['GET', 'POST'])
 def auth_screenname():
     oauth_token_qualtrics = request.args.get('oauth_token')
-
+    # Find oauth_token from db
     try:
-        screen_name_return = screenname_store[oauth_token_qualtrics]
-    except KeyError:
-        return "No data found for token", 404
+        user_details = database.get_user_details(oauth_token_qualtrics)
+        if user_details:
+            # Extracting details from user_details
+            screen_name_return = user_details['screen_name']
+            userid_return = user_details['user_id']
+            access_token_return = user_details['access_token']
+            access_token_secret_return = user_details['access_token_secret']
 
-    print("SCREEN NAME CALLED!!!")
-    print(screen_name_return)
+            print("Hello, ", screen_name_return)
+            return f"{screen_name_return}$$$" + str(
+                userid_return) + "$$$" + access_token_return + "$$$" + access_token_secret_return
+        else:
+            # Handle case where no data is found
+            return "No data found for token", 404
 
-    if screen_name_return == "####":
-        return screen_name_return
-
-    userid_return = userid_store[oauth_token_qualtrics]
-    access_token_return = access_token_store[oauth_token_qualtrics]
-    access_token_secret_return = access_token_secret_store[oauth_token_qualtrics]
-
-    print("Hello")
-
-    return screen_name_return + "$$$" + str(
-        userid_return) + "$$$" + access_token_return + "$$$" + access_token_secret_return
+    except Exception as e:
+        # Log the exception and return an error message
+        logging.error(f"Error retrieving user details: {e}")
+        return "An error occurred", 500
 
 
 @bp.route('/following', methods=['POST'])
@@ -186,7 +193,7 @@ def following():
     """
     user_id = request.args.get('user_id')
     response = database.get_access_token(user_id)
-    access_token_response = response.json()
+    access_token_response = response.get_json()
     print("access_token_response:")
     print(access_token_response)
 
@@ -375,11 +382,8 @@ def get_userid():
     Returns: user_id
     """
     vsid = request.args.get("vsid")
-    print(vsid)
-    response = database.get_user_info(vsid)
-    user_info = response.json()
-    print(user_info)
-    return str(user_info)
+    user_info = database.get_user_info(vsid)
+    return user_info
 
 
 @bp.route('/get_group', methods=['GET', 'POST'])

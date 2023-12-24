@@ -17,7 +17,7 @@ import pandas as pd
 import random
 import tweepy
 from datetime import datetime
-from flask import render_template, request, Blueprint
+from flask import abort, request, Blueprint
 
 from . import database
 from .configuration import configuration
@@ -387,7 +387,11 @@ def get_group():
     """
     wave 3
     """
-    user_id = request.args.get("user_id").strip()
+    # XXX do the same in other functions -GLC
+    if "user_id" in request.args:
+        user_id = request.args.get("user_id").strip()
+    else:
+        abort(500, "No user_id specified. Aborting.")
 
     # store in DB:
     insert_group_payload = {
@@ -539,9 +543,9 @@ def get_exposure():
         return "$$$".join(all_handles)
 
 
-@bp.errorhandler(500)
-def internal_server_error(e):
-    return render_template('error.html', error_message=f'uncaught exception: {e}'), 500
+# @bp.errorhandler(500)
+# def internal_server_error(e):
+#     return render_template('error.html', error_message=f'uncaught exception: {e}'), 500
 
 
 @bp.after_request

@@ -128,6 +128,7 @@ def get_user_details(oauth_token_qualtrics):
     else:
         logging.info(f"Getting user details for: {oauth_token_qualtrics=} failed")
     cursor.close()
+    connection.close()
 
 
 def delete_auth_temp(oauth_token):
@@ -230,12 +231,9 @@ def get_randomized_group(user_id):
     connection = getdb()
     cursor = connection.cursor()
     cursor.execute("SELECT randomized_group FROM randomized_group WHERE user_id=%s;", (user_id,))
-    result = cursor.fetchone()
-    print(result[0])
-    if result:
-        randomized_group = result[0]
-        return jsonify(randomized_group)
+    result = cursor.fetchone()[0]
     cursor.close()
+    return result
 
 
 def store_mute_state(user_id, state):

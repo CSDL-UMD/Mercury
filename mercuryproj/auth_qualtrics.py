@@ -33,25 +33,20 @@ request_token_url = str(webInformation['request_token_url'])
 access_token_url = str(webInformation['access_token_url'])
 authorize_url = str(webInformation['authorize_url'])
 
-oauth_store = {}
-screenname_store = {}
-userid_store = {}
-access_token_store = {}
-access_token_secret_store = {}
-
-processed_users = {}
-
 
 def process_user_id(user_id):
     """
-    Wave 1
-    Randomized sampling of headlines for each user_id
+    Wave  - Randomized sampling of headlines for each user_id
     :return: sampled_df (sampled headlines for the user_id)
     """
-    if user_id in processed_users:
-        print(f"User ID {user_id} is already processed.")
-        return processed_users[user_id]
-
+    # Define the directory where user data files are saved
+    directory = "/home/ubuntu/mercury-develop/data/headlines_user"
+    filepath = os.path.join(directory, f"data_{user_id}.json")
+    # Check if user data already exists
+    if os.path.exists(filepath):
+        print(f"User ID {user_id} data file already exists. Skipping processing.")
+        return None
+    # Load data from headline.json
     with open(str(files("mercuryproj.data").joinpath("headline.json")), mode='r') as f:
         data = json.load(f)
 
@@ -69,8 +64,6 @@ def process_user_id(user_id):
 
     sampled_df['wave'] = wave
     sampled_df['user_id'] = user_id
-
-    processed_users[user_id] = sampled_df
 
     return sampled_df
 
@@ -95,9 +88,7 @@ def auth_start():
     print(data_tokens)
     oauth_token = data_tokens[0].split("=")[1]
     oauth_token_secret = data_tokens[1].split("=")[1]
-    # oauth_store[oauth_token] = oauth_token_secret
-    screenname_store[oauth_token] = "####"
-    # save oauth_token(=key) and oauth_token_secret to DB
+
     insert_auth_payload = {
         'oauth_token': oauth_token,
         'oauth_token_secret': oauth_token_secret,
@@ -117,8 +108,7 @@ def qualcallback():
     oauth_denied = request.args.get('denied')
 
     if oauth_denied:
-        if oauth_denied in oauth_store:
-            del oauth_store[oauth_denied]
+        logging.info('oauth denied!')
         return "<script>window.onload = window.close();</script>"
 
     # Retrieve oauth_token_secret from DB using oauth_token as the key
@@ -137,11 +127,6 @@ def qualcallback():
     user_id = access_token[2].split("=")[1]
     screen_name = access_token[3].split("=")[1]
 
-    # screenname_store[oauth_token] = screen_name
-    # userid_store[oauth_token] = user_id
-    # access_token_store[oauth_token] = real_oauth_token
-    # access_token_secret_store[oauth_token] = real_oauth_token_secret
-    # del oauth_store[oauth_token]
     print(real_oauth_token)
     timestamp = datetime.now().isoformat()
 
@@ -191,7 +176,10 @@ def following():
     """
     Wave 1
     """
-    user_id = request.args.get('user_id')
+    if "user_id" in request.args:
+        user_id = request.args.get("user_id").strip()
+    else:
+        abort(500, "No user_id specified. Aborting.")
     response = database.get_access_token(user_id)
     access_token_response = response.get_json()
     print("access_token_response:")
@@ -211,10 +199,8 @@ def following():
             access_token=access_token,
             access_token_secret=access_token_secret,
             return_type=dict)
-
     # target_follow_id: Mercury study account!
     target_follow_id = "1691551574550519808"
-
     # Try the following
     success = False
     for attempt in range(3):  # Try up to 3 times
@@ -232,10 +218,8 @@ def following():
     # If all attempts failed and success is still False, assign response to success.
     if not success:
         success = "Failed"
-
     # log the day
     timestamp = datetime.now().isoformat()
-
     # store in DB:
     insert_following_payload = {
         "user_id": user_id,
@@ -252,10 +236,16 @@ def randomize_headline():
     """
     Wave 1
     """
-    user_id = request.args.get("user_id").strip()
+    if "user_id" in request.args:
+        user_id = request.args.get("user_id").strip()
+    else:
+        abort(500, "No user_id specified. Aborting.")
 
     sampled_df = process_user_id(user_id)
-    print(sampled_df)
+
+    # Check if the user was already processed
+    if sampled_df is None:
+        return "User already processed."
 
     result_dict = sampled_df.to_dict('records')
 
@@ -265,7 +255,6 @@ def randomize_headline():
     # Save the result to a JSON file per user:
     with open(os.path.join(directory, f"data_{user_id}.json"), 'w') as f:
         f.write(json.dumps(result_dict, indent=4))
-
     return "Finished sampling headlines"
 
 
@@ -303,7 +292,7 @@ def get_sampled_headlines():
         resp_return = f"{files_wave[0]}$$${files_wave[1]}$$${files_wave[2]}$$${files_wave[3]}$$${files_wave[4]}$$${files_wave[5]}$$${files_wave[6]}$$${files_wave[7]}$$${files_wave[8]}$$${files_wave[9]}$$${files_wave[10]}$$${files_wave[11]}"
     else:
         print("Invalid wave value")
-    print(f"HERE'S {user_id}'S HEADLINES FOR THE WAVE:")
+    print(f"HERE'S {user_id}'S HEADLINES FOR THE WAVE {wave}:")
     print(resp_return)
     return resp_return
 
@@ -368,7 +357,7 @@ def mute_group():
         extra_samples = remaining_df.sample(n=min(len(remaining_df), remaining_samples), replace=False)
         muted_list.extend(extra_samples.to_dict('records'))
     # Set the directory where the files will be saved
-    directory = "/home/ubuntu/mercury-develop/data/muting_job"
+    directory = "/home/ubuntu/mercury-develop/data/muting_job/muted_accounts"
     # Save the result to a JSON file per user:
     with open(os.path.join(directory, f"muted_accounts_for_{user_id}.json"), 'w') as f:
         f.write(json.dumps(muted_list, indent=4))
@@ -402,7 +391,7 @@ def get_group():
         "user_id": user_id,
     }
     randomized_group_info = database.get_randomized_group(**insert_group_payload)
-    return str(randomized_group_info)
+    return randomized_group_info
 
 
 @bp.route('/follow_politifact', methods=['POST'])
@@ -410,9 +399,12 @@ def follow_politifact():
     """
     In Wave 3, if respondents click the follow button, we follow @PolitiFact on behalf of them.
     """
-    user_id = request.args.get("user_id").strip()
+    if "user_id" in request.args:
+        user_id = request.args.get("user_id").strip()
+    else:
+        abort(500, "No user_id specified. Aborting.")
     response = database.get_access_token(user_id)
-    access_token_response = response.jso
+    access_token_response = response.get_json()
     access_token = access_token_response['access_token']
     access_token_secret = access_token_response['access_token_secret']
     # make a tweepy client
@@ -459,19 +451,19 @@ def get_exposure():
     """
     Wave 3
     """
-    user_id = request.args.get("user_id").strip()
-
+    if "user_id" in request.args:
+        user_id = request.args.get("user_id").strip()
+    else:
+        abort(500, "No user_id specified. Aborting.")
     # Get randomized group
-    insert_group_payload = {"user_id": user_id}
-    randomized_group_response = database.get_randomized_group(**insert_group_payload)
-    randomized_group = randomized_group_response.text
-
+    randomized_group = database.get_randomized_group(user_id)
+    print(randomized_group)
     top_10 = ["CGTNOfficial", "XHNews", "TuckerCarlson", "PDChina", "SeanHannity", "wikileaks",
               "dbongino", "IngrahamAngle", "rt_com", "republic"]
 
     if randomized_group in ["muting_treatment1", "muting_treatment2"]:
         # Load the muted accounts data
-        muted_accounts_file = f"/home/ubuntu/mercury-develop/data/muting_job/muted_accounts_for_{user_id}.json"
+        muted_accounts_file = f"/home/ubuntu/mercury-develop/data/muting_job/muted_accounts/muted_accounts_for_{user_id}.json"
         muted_accounts = []
         if os.path.exists(muted_accounts_file):
             with open(muted_accounts_file, 'r') as file:
@@ -544,6 +536,7 @@ def get_exposure():
     else:
         # Randomly select 7 accounts from the top_10 list
         all_handles = random.sample(top_10, 7)
+        print(all_handles)
         return "$$$".join(all_handles)
 
 

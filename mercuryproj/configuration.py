@@ -8,7 +8,7 @@ config_fn = "config.ini"
 config_dir = user_config_dir(appname=__package__)
 
 if not os.path.exists(config_dir):
-    logging.warn(f"Configuration dir {config_dir} does not exist. Creating it now.")
+    logging.warning(f"Configuration dir {config_dir} does not exist. Creating it now.")
     os.mkdir(config_dir)
 
 config_path = os.path.join(config_dir, config_fn)

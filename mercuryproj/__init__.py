@@ -3,16 +3,18 @@ import logging
 
 
 def create_app():
-    app_dev = Flask(__name__)
+    app = Flask(__name__)
 
-    app_dev.debug = True
-
+    app.debug = True
     logging.basicConfig(level=logging.INFO)
 
-    from . import auth_qualtrics
-    app_dev.register_blueprint(auth_qualtrics.bp)
+    from . import database
+    database.init_app(app)
 
-    return app_dev
+    from . import auth_qualtrics
+    app.register_blueprint(auth_qualtrics.bp)
+
+    return app
 
 
 if __name__ == "__main__":

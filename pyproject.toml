@@ -10,11 +10,13 @@ authors = [
 description = "Backend API and scripts for the 'Muting low-quality sources' project of the Mercury Project research consortium."
 dependencies = [
     "flask",
+    "click",
     "tweepy",
     "pandas",
     "requests",
     "requests-oauthlib",
-    "gunicorn[gevent]"
+    "platformdirs",
+    "psycopg2"
 ]
 readme = "README.md"
 requires-python = ">=3.10"

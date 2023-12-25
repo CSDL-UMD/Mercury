@@ -5,17 +5,12 @@ From Wave 2 start day to last day:
 - `mute_users()`: every 4 hours
 
 """
-
 import time
 import json
-import requests
 import tweepy
 from datetime import datetime
-from flask import url_for
-
 from . import database
 from .configuration import configuration
-
 
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
@@ -29,8 +24,8 @@ def mute_users():
     new_users = [user_info["user_id"] for user_info in all_users_state if user_info["state"] == "New"]
     for user_id in new_users:
         print(user_id)
-        response = requests.get(url_for('database.get_access_token', _external=True), params={'user_id': user_id})
-        access_token_response = response.json()
+        response = database.get_access_token(user_id)
+        access_token_response = response.get_json()
 
         if 'error' in access_token_response:
             raise Exception(access_token_response['error'])
@@ -49,7 +44,7 @@ def mute_users():
             wait_on_rate_limit=True
         )
         # Retrieve list of accounts that should be muted
-        directory = "/home/ubuntu/mercury-develop/data/muting_job"
+        directory = "/home/ubuntu/mercury-develop/data/muting_job/muted_accounts"
         with open(f'{directory}/muted_accounts_for_{user_id}.json', 'r') as f:
             sampled_muting_list = json.load(f)
 

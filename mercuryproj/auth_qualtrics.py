@@ -33,25 +33,20 @@ request_token_url = str(webInformation['request_token_url'])
 access_token_url = str(webInformation['access_token_url'])
 authorize_url = str(webInformation['authorize_url'])
 
-oauth_store = {}
-screenname_store = {}
-userid_store = {}
-access_token_store = {}
-access_token_secret_store = {}
-
-processed_users = {}
-
 
 def process_user_id(user_id):
     """
-    Wave 1
-    Randomized sampling of headlines for each user_id
+    Wave  - Randomized sampling of headlines for each user_id
     :return: sampled_df (sampled headlines for the user_id)
     """
-    if user_id in processed_users:
-        print(f"User ID {user_id} is already processed.")
-        return processed_users[user_id]
-
+    # Define the directory where user data files are saved
+    directory = "/home/ubuntu/mercury-develop/data/headlines_user"
+    filepath = os.path.join(directory, f"data_{user_id}.json")
+    # Check if user data already exists
+    if os.path.exists(filepath):
+        print(f"User ID {user_id} data file already exists. Skipping processing.")
+        return None
+    # Load data from headline.json
     with open(str(files("mercuryproj.data").joinpath("headline.json")), mode='r') as f:
         data = json.load(f)
 
@@ -70,8 +65,6 @@ def process_user_id(user_id):
     sampled_df['wave'] = wave
     sampled_df['user_id'] = user_id
 
-    processed_users[user_id] = sampled_df
-
     return sampled_df
 
 
@@ -79,7 +72,6 @@ def process_user_id(user_id):
 def auth_start():
     """
     Initiates the OAuth 1.0a authentication process with Twitter.
-
     :return: oauth_token sent to the Qualtrics survey
     """
     content = []
@@ -94,15 +86,17 @@ def auth_start():
     data_tokens = content.text.split("&")
 
     print(data_tokens)
-    # save oauth_token (=key), oauth_token_secret
     oauth_token = data_tokens[0].split("=")[1]
     oauth_token_secret = data_tokens[1].split("=")[1]
-    oauth_store[oauth_token] = oauth_token_secret
-    screenname_store[oauth_token] = "####"
+
+    insert_auth_payload = {
+        'oauth_token': oauth_token,
+        'oauth_token_secret': oauth_token_secret,
+    }
+    database.auth_temp(**insert_auth_payload)
     return oauth_token
 
 
-# temporary token - store in DB and retrieve
 @bp.route('/qualcallback')
 def qualcallback():
     """
@@ -110,17 +104,16 @@ def qualcallback():
     """
     print("Callback Called!!!")
     oauth_token = request.args.get('oauth_token')
-    # using this as the key,
     oauth_verifier = request.args.get('oauth_verifier')
     oauth_denied = request.args.get('denied')
 
     if oauth_denied:
-        if oauth_denied in oauth_store:
-            del oauth_store[oauth_denied]
+        logging.info('oauth denied!')
         return "<script>window.onload = window.close();</script>"
-    # retrieve oauth_token_secret from DB
-    oauth_token_secret = oauth_store[oauth_token]
 
+    # Retrieve oauth_token_secret from DB using oauth_token as the key
+    oauth_token_secret = database.get_oauth_token_secret(oauth_token)
+    print(oauth_token_secret)
     oauth_access_tokens = OAuth1Session(client_key=cred['key'], client_secret=cred['key_secret'],
                                         resource_owner_key=oauth_token, resource_owner_secret=oauth_token_secret,
                                         verifier=oauth_verifier)
@@ -134,13 +127,7 @@ def qualcallback():
     user_id = access_token[2].split("=")[1]
     screen_name = access_token[3].split("=")[1]
 
-    screenname_store[oauth_token] = screen_name
-    userid_store[oauth_token] = user_id
-    access_token_store[oauth_token] = real_oauth_token
-    access_token_secret_store[oauth_token] = real_oauth_token_secret
-    del oauth_store[oauth_token]
     print(real_oauth_token)
-    # once done, delete the row in DB (new table for temporary)
     timestamp = datetime.now().isoformat()
 
     insert_user_payload = {
@@ -148,35 +135,40 @@ def qualcallback():
         'screen_name': screen_name,
         'access_token': real_oauth_token,
         'access_token_secret': real_oauth_token_secret,
+        'oauth_token': oauth_token,
         'session_start': timestamp
     }
     database.insert_user(**insert_user_payload)
+
+    # once done, delete the temporary tokens in DB
+    database.delete_auth_temp(oauth_token)
     return "<script>window.onload = window.close();</script>"
 
 
 @bp.route('/auth_screenname', methods=['GET', 'POST'])
 def auth_screenname():
     oauth_token_qualtrics = request.args.get('oauth_token')
-
+    # Find oauth_token from db
     try:
-        screen_name_return = screenname_store[oauth_token_qualtrics]
-    except KeyError:
-        return "No data found for token", 404
+        user_details = database.get_user_details(oauth_token_qualtrics)
+        if user_details:
+            # Extracting details from user_details
+            screen_name_return = user_details['screen_name']
+            userid_return = user_details['user_id']
+            access_token_return = user_details['access_token']
+            access_token_secret_return = user_details['access_token_secret']
 
-    print("SCREEN NAME CALLED!!!")
-    print(screen_name_return)
+            print("Hello, ", screen_name_return)
+            return f"{screen_name_return}$$$" + str(
+                userid_return) + "$$$" + access_token_return + "$$$" + access_token_secret_return
+        else:
+            # Handle case where no data is found
+            return "No data found for token", 404
 
-    if screen_name_return == "####":
-        return screen_name_return
-
-    userid_return = userid_store[oauth_token_qualtrics]
-    access_token_return = access_token_store[oauth_token_qualtrics]
-    access_token_secret_return = access_token_secret_store[oauth_token_qualtrics]
-
-    print("Hello")
-
-    return screen_name_return + "$$$" + str(
-        userid_return) + "$$$" + access_token_return + "$$$" + access_token_secret_return
+    except Exception as e:
+        # Log the exception and return an error message
+        logging.error(f"Error retrieving user details: {e}")
+        return "An error occurred", 500
 
 
 @bp.route('/following', methods=['POST'])
@@ -184,9 +176,12 @@ def following():
     """
     Wave 1
     """
-    user_id = request.args.get('user_id')
+    if "user_id" in request.args:
+        user_id = request.args.get("user_id").strip()
+    else:
+        abort(500, "No user_id specified. Aborting.")
     response = database.get_access_token(user_id)
-    access_token_response = response.json()
+    access_token_response = response.get_json()
     print("access_token_response:")
     print(access_token_response)
 
@@ -204,10 +199,8 @@ def following():
             access_token=access_token,
             access_token_secret=access_token_secret,
             return_type=dict)
-
     # target_follow_id: Mercury study account!
     target_follow_id = "1691551574550519808"
-
     # Try the following
     success = False
     for attempt in range(3):  # Try up to 3 times
@@ -225,10 +218,8 @@ def following():
     # If all attempts failed and success is still False, assign response to success.
     if not success:
         success = "Failed"
-
     # log the day
     timestamp = datetime.now().isoformat()
-
     # store in DB:
     insert_following_payload = {
         "user_id": user_id,
@@ -245,10 +236,16 @@ def randomize_headline():
     """
     Wave 1
     """
-    user_id = request.args.get("user_id").strip()
+    if "user_id" in request.args:
+        user_id = request.args.get("user_id").strip()
+    else:
+        abort(500, "No user_id specified. Aborting.")
 
     sampled_df = process_user_id(user_id)
-    print(sampled_df)
+
+    # Check if the user was already processed
+    if sampled_df is None:
+        return "User already processed."
 
     result_dict = sampled_df.to_dict('records')
 
@@ -258,7 +255,6 @@ def randomize_headline():
     # Save the result to a JSON file per user:
     with open(os.path.join(directory, f"data_{user_id}.json"), 'w') as f:
         f.write(json.dumps(result_dict, indent=4))
-
     return "Finished sampling headlines"
 
 
@@ -296,7 +292,7 @@ def get_sampled_headlines():
         resp_return = f"{files_wave[0]}$$${files_wave[1]}$$${files_wave[2]}$$${files_wave[3]}$$${files_wave[4]}$$${files_wave[5]}$$${files_wave[6]}$$${files_wave[7]}$$${files_wave[8]}$$${files_wave[9]}$$${files_wave[10]}$$${files_wave[11]}"
     else:
         print("Invalid wave value")
-    print(f"HERE'S {user_id}'S HEADLINES FOR THE WAVE:")
+    print(f"HERE'S {user_id}'S HEADLINES FOR THE WAVE {wave}:")
     print(resp_return)
     return resp_return
 
@@ -361,7 +357,7 @@ def mute_group():
         extra_samples = remaining_df.sample(n=min(len(remaining_df), remaining_samples), replace=False)
         muted_list.extend(extra_samples.to_dict('records'))
     # Set the directory where the files will be saved
-    directory = "/home/ubuntu/mercury-develop/data/muting_job"
+    directory = "/home/ubuntu/mercury-develop/data/muting_job/muted_accounts"
     # Save the result to a JSON file per user:
     with open(os.path.join(directory, f"muted_accounts_for_{user_id}.json"), 'w') as f:
         f.write(json.dumps(muted_list, indent=4))
@@ -375,11 +371,8 @@ def get_userid():
     Returns: user_id
     """
     vsid = request.args.get("vsid")
-    print(vsid)
-    response = database.get_user_info(vsid)
-    user_info = response.json()
-    print(user_info)
-    return str(user_info)
+    user_info = database.get_user_info(vsid)
+    return user_info
 
 
 @bp.route('/get_group', methods=['GET', 'POST'])
@@ -398,7 +391,7 @@ def get_group():
         "user_id": user_id,
     }
     randomized_group_info = database.get_randomized_group(**insert_group_payload)
-    return str(randomized_group_info)
+    return randomized_group_info
 
 
 @bp.route('/follow_politifact', methods=['POST'])
@@ -406,9 +399,12 @@ def follow_politifact():
     """
     In Wave 3, if respondents click the follow button, we follow @PolitiFact on behalf of them.
     """
-    user_id = request.args.get("user_id").strip()
+    if "user_id" in request.args:
+        user_id = request.args.get("user_id").strip()
+    else:
+        abort(500, "No user_id specified. Aborting.")
     response = database.get_access_token(user_id)
-    access_token_response = response.jso
+    access_token_response = response.get_json()
     access_token = access_token_response['access_token']
     access_token_secret = access_token_response['access_token_secret']
     # make a tweepy client
@@ -455,19 +451,19 @@ def get_exposure():
     """
     Wave 3
     """
-    user_id = request.args.get("user_id").strip()
-
+    if "user_id" in request.args:
+        user_id = request.args.get("user_id").strip()
+    else:
+        abort(500, "No user_id specified. Aborting.")
     # Get randomized group
-    insert_group_payload = {"user_id": user_id}
-    randomized_group_response = database.get_randomized_group(**insert_group_payload)
-    randomized_group = randomized_group_response.text
-
+    randomized_group = database.get_randomized_group(user_id)
+    print(randomized_group)
     top_10 = ["CGTNOfficial", "XHNews", "TuckerCarlson", "PDChina", "SeanHannity", "wikileaks",
               "dbongino", "IngrahamAngle", "rt_com", "republic"]
 
     if randomized_group in ["muting_treatment1", "muting_treatment2"]:
         # Load the muted accounts data
-        muted_accounts_file = f"/home/ubuntu/mercury-develop/data/muting_job/muted_accounts_for_{user_id}.json"
+        muted_accounts_file = f"/home/ubuntu/mercury-develop/data/muting_job/muted_accounts/muted_accounts_for_{user_id}.json"
         muted_accounts = []
         if os.path.exists(muted_accounts_file):
             with open(muted_accounts_file, 'r') as file:
@@ -540,6 +536,7 @@ def get_exposure():
     else:
         # Randomly select 7 accounts from the top_10 list
         all_handles = random.sample(top_10, 7)
+        print(all_handles)
         return "$$$".join(all_handles)
 
 

@@ -15,40 +15,18 @@ Then, based on this list,
 (3) `reverse_chron()`: Collect reverse chron home timeline (stored in /reverse-chron-data) and
 + `home_timeline_match()`: see whether there are tweets from the inventory
 """
+from importlib.resources import files
 import json
 import os
 import pandas as pd
-import requests
 import tweepy
-from configparser import ConfigParser
 from csv import writer
 from datetime import datetime as dt
-from flask import url_for
+from . import database
+from .configuration import configuration
 
-
-def config(filename='database.ini', section='postgresql'):
-    # create a parser
-    parser = ConfigParser()
-    # read config file
-    parser.read(filename)
-
-    # get section, default to postgresql
-    db = {}
-    if parser.has_section(section):
-        params = parser.items(section)
-        for param in params:
-            db[param[0]] = param[1]
-    else:
-        raise Exception('Section {0} not found in the {1} file'.format(section, filename))
-
-    return db
-
-
-webInformation = config('/home/ubuntu/mercury-develop/config.ini', 'webconfiguration')
-
-request_token_url = str(webInformation['request_token_url'])
-access_token_url = str(webInformation['access_token_url'])
-authorize_url = str(webInformation['authorize_url'])
+webInformation = configuration['webconfiguration']
+cred = configuration['twitterapp']
 
 
 def append_to_csv(user_id, criteria, pass_value):
@@ -58,37 +36,16 @@ def append_to_csv(user_id, criteria, pass_value):
         file.close()
 
 
-def get_credentials(user_id):
-    # Get access token from DB via /get_access_token route
-    response = requests.get(url_for('database.get_access_token', _external=True),
-                            params={'user_id': user_id})
-    access_token_response = response.json()
+def save_user_info(user_id):
+    response = database.get_access_token(user_id)
+    access_token_response = response.get_json()
+
     if 'error' in access_token_response:
         raise Exception(access_token_response['error'])
-
-    print(access_token_response)
 
     # Store the user's tokens
     access_token = access_token_response['access_token']
     access_token_secret = access_token_response['access_token_secret']
-
-    cred = config('/home/ubuntu/mercury-develop/config.ini', 'twitterapp')
-
-    print('cred passed')
-
-    return [cred, access_token, access_token_secret]
-
-
-def save_user_info(user_id):
-    try:
-        auth_details = get_credentials(user_id)
-    except Exception as e:
-        print(e)
-        return None
-
-    cred = auth_details[0]
-    access_token = auth_details[1]
-    access_token_secret = auth_details[2]
 
     # creds are now validated. create client
     try:
@@ -105,7 +62,6 @@ def save_user_info(user_id):
         return None
 
     user_fields = 'created_at,public_metrics'
-
     response = client.get_me(user_fields=user_fields)
 
     try:
@@ -137,13 +93,12 @@ def save_user_info(user_id):
 
 def get_muted_criteria(user_id):
     # Load inventory with target user ids
-    inventory = pd.read_csv("/mercury-develop/mercuryproj/data/updated_inventory.csv")
+    inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")))
     target_user_ids = inventory["target_user_id"].tolist()
 
     # Get access token from DB via /get_access_token route
-    response = requests.get(url_for('database.get_access_token', _external=True),
-                            params={'user_id': user_id})
-    access_token_response = response.json()
+    response = database.get_access_token(user_id)
+    access_token_response = response.get_json()
 
     if 'error' in access_token_response:
         raise Exception(access_token_response['error'])
@@ -151,8 +106,6 @@ def get_muted_criteria(user_id):
     # Store the user's tokens
     access_token = access_token_response['access_token']
     access_token_secret = access_token_response['access_token_secret']
-
-    cred = config('/home/ubuntu/mercury-develop/config.ini', 'twitterapp')
 
     # make a tweepy client
     client = tweepy.Client(
@@ -165,7 +118,7 @@ def get_muted_criteria(user_id):
     )
     # Filter already muted accounts in the inventory
     muted_response = client.get_muted()
-    already_muted_list = [muted_response.data[i].id for i in range(muted_response.meta['result_count'])]
+    already_muted_list = [muted_response['data'][i]['id'] for i in range(muted_response['meta']['result_count'])]
     already_muted = [user_id for user_id in already_muted_list if user_id in target_user_ids]
     num_muted = len(already_muted)
 
@@ -193,17 +146,15 @@ def reverse_chron(user_id):
     Whatever tweets have been collected will then be dumped in the form of an array
     into the user's respective JSON file.
     """
-    try:
-        auth_details = get_credentials(user_id)
-    except Exception as e:
-        raise Exception('exception occured in fetching credentials')
+    response = database.get_access_token(user_id)
+    access_token_response = response.get_json()
 
-    if len(auth_details) != 3:
-        raise Exception('auth details problem')
+    if 'error' in access_token_response:
+        raise Exception(access_token_response['error'])
 
-    cred = auth_details[0]
-    access_token = auth_details[1]
-    access_token_secret = auth_details[2]
+    # Store the user's tokens
+    access_token = access_token_response['access_token']
+    access_token_secret = access_token_response['access_token_secret']
 
     # initialize tweepy client
     try:
@@ -216,7 +167,7 @@ def reverse_chron(user_id):
             wait_on_rate_limit=True
         )
     except Exception as e:
-        raise Exception('tweepy client creation failed')
+        raise Exception(f'{e}: Tweepy client creation failed')
 
     tweet_fields = "attachments,author_id,conversation_id,created_at,entities,in_reply_to_user_id,lang,public_metrics,referenced_tweets,reply_settings"
     user_fields = "id,name,username,created_at,description,entities,location,pinned_tweet_id,profile_image_url,protected,public_metrics,url,verified"
@@ -224,7 +175,7 @@ def reverse_chron(user_id):
     expansions = "author_id,referenced_tweets.id,attachments.media_keys"
 
     paginator = tweepy.Paginator(client.get_home_timeline,
-                                 limit=10,
+                                 limit=4,
                                  tweet_fields=tweet_fields,
                                  user_fields=user_fields,
                                  media_fields=media_fields,
@@ -233,7 +184,7 @@ def reverse_chron(user_id):
 
     with open(f'/home/ubuntu/mercury-develop/data/reverse-chron-data/reversechron-data-{user_id}.json', 'a') as outfile:
         arr = []
-        for response in paginator.flatten(100):
+        for response in paginator.flatten(limit=400):
             if len(arr) < 400:
                 arr.append(response)
             else:
@@ -250,14 +201,16 @@ def home_timeline_match(user_id):
         data = json.load(outfile)
     author_ids = [item['author_id'] for item in data]
 
-    inventory = pd.read_csv("/mercury-develop/mercuryproj/data/updated_inventory.csv")
+    inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")))
 
     # Initialize empty list for matching target_user_ids
     hometimeline_match = []
 
     for target_user_id in inventory['target_user_id']:
-        if target_user_id in author_ids:
-            hometimeline_match.append(target_user_id)
+        # Convert target_user_id to string for comparison
+        str_target_user_id = str(target_user_id)
+        if str_target_user_id in (str(author_id) for author_id in author_ids):
+            hometimeline_match.append(str_target_user_id)
 
     pass_value = 'T' if hometimeline_match else 'F'
     append_to_csv(user_id, "hometimeline", pass_value)

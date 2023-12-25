@@ -38,8 +38,12 @@ def closedb(e=None):
 def initdb():
     """ Initializes the database using bundled schema.sql file """
     db = getdb()
-    with current_app.open_resource('schema.sql') as f:
-        db.execute(f.read().decode('utf8'))
+    cursor = db.cursor()
+    try:
+        with current_app.open_resource('schema.sql') as f:
+            cursor.execute(f.read().decode('utf8'))
+    finally:
+        cursor.close()
 
 
 @click.command("init-db")

@@ -464,52 +464,64 @@ def get_exposure():
     if randomized_group in ["muting_treatment1", "muting_treatment2"]:
         # Load the muted accounts data
         muted_accounts_file = f"/home/ubuntu/mercury-develop/data/muting_job/muted_accounts/muted_accounts_for_{user_id}.json"
-        muted_accounts = []
-        if os.path.exists(muted_accounts_file):
-            with open(muted_accounts_file, 'r') as file:
-                muted_data = json.load(file)
-            muted_accounts = [account["target_user_id"] for account in muted_data]
+        with open(muted_accounts_file, 'r') as file:
+            muted_data = json.load(file)
 
         # Load hometimeline match data
         hometimeline_match_file = f"/home/ubuntu/mercury-develop/data/eligibility/hometimeline_match/match_for_{user_id}.json"
-        lq_followed_and_muted = 'F'
         author_ids = []
         matched_accounts = []
-        if os.path.exists(hometimeline_match_file):
-            with open(hometimeline_match_file, 'r') as file:
-                hometimeline_data = json.load(file)
+        with open(hometimeline_match_file, 'r') as file:
+            hometimeline_data = json.load(file)
 
-            # Extracting author_ids and checking if they are in muted_accounts
-            author_ids = [item["author_id"] for item in hometimeline_data]
-            matched_accounts = [author_id for author_id in author_ids if int(author_id) in muted_accounts]
+        # Loop through the dictionary and add the IDs to author_ids
+        for ids in hometimeline_data.values():
+            author_ids.extend(ids)
 
-            # Update lq_followed_and_muted based on whether any matches were found
-            lq_followed_and_muted = 'T' if matched_accounts else 'F'
+        # author_ids: a list of strings & integers for data type match
+        author_ids = set(int(author_id) for author_id in author_ids)
+
+        # Iterate through each account in muted_data to find matched accounts
+        for account in muted_data:
+            target_user_id = account["target_user_id"]
+            if target_user_id in author_ids:
+                matched_accounts.append(target_user_id)  # Add the matched account
+
+        # Update lq_followed_and_muted based on whether any matches were found
+        lq_followed_and_muted = 'T' if matched_accounts else 'F'
 
         if lq_followed_and_muted == 'T':
+            # Convert matched accounts to a set of integers for comparison
+            matched_accounts_set = set(matched_accounts)
+
+            # Filter the muted data to find the matched accounts details
+            matched_accounts_details = [account for account in muted_data if
+                                        account["target_user_id"] in matched_accounts_set]
+
             # Find the highest followed account from matched accounts in muted_accounts
-            highest_followed_account = max([muted_accounts[int(account_id)] for account_id in matched_accounts],
-                                           key=lambda x: x["followers"])
+            highest_followed_account = max(matched_accounts_details, key=lambda x: x["followers"])
             highest_followed_handle = highest_followed_account["twitter_handle"]
 
-            # Select top 3 followed accounts from remaining muted accounts, excluding the highest followed one
-            remaining_muted_accounts = [account for account in muted_data if
-                                        account["twitter_handle"] != highest_followed_handle]
-            top_followed_muted_handles = sorted(remaining_muted_accounts, key=lambda x: x["followers"],
-                                                reverse=True)[:3]
-            top_followed_muted_handles = [account["twitter_handle"] for account in top_followed_muted_handles]
+            # Select top 3 accounts from remaining muted accounts from muted_data, excluding the highest followed one
+            remaining_muted_accounts = [account for account in muted_data if account["twitter_handle"] != highest_followed_handle]
 
-            # Select the first two accounts from top_10 that are not in the muted_accounts
+            # Now select the top 3 followed accounts from the remaining muted accounts
+            top_3_muted_handles = sorted(remaining_muted_accounts, key=lambda x: x["followers"], reverse=True)[:3]
+            top_3_muted_handles = [account["twitter_handle"] for account in top_3_muted_handles]
+
+            # Select the three accounts from top_10 that are not in the muted_accounts
             non_muted_handles = [handle for handle in top_10 if
                                  handle not in [account["twitter_handle"] for account in muted_data]]
-            selected_non_muted_handles = non_muted_handles[:3]
+            non_muted_handles = non_muted_handles[:3]
 
             # Concatenate all selected handles
-            all_handles = [highest_followed_handle] + top_followed_muted_handles + selected_non_muted_handles
+            all_handles = [highest_followed_handle] + top_3_muted_handles + non_muted_handles
+            return "$$$".join(all_handles)
         else:
             # Select top 4 followed accounts from muted accounts
-            top_followed_muted_handles = sorted([account["twitter_handle"] for account in muted_data],
-                                                key=lambda x: x["followers"], reverse=True)[:4]
+            top_4_muted_accounts = sorted(muted_data, key=lambda x: x['followers'], reverse=True)[:4]
+            top_4_muted_handles = [account['twitter_handle'] for account in top_4_muted_accounts]
+
             # Select top 1 followed accounts that are non-muted
             client = tweepy.Client(
                 consumer_key=cred['key'],
@@ -519,30 +531,23 @@ def get_exposure():
                 return_type=dict,
                 wait_on_rate_limit=True
             )
-            response = client.get_users(ids=author_ids, user_auth=True, user_fields='public_metrics')
-            highest_followed_nonmuted = ''
-            if 'data' in response:
-                highest_followed_nonmuted = max(response['data'],
-                                                key=lambda x: x['public_metrics']['followers_count'])['username']
+            response = client.get_users(ids=list(author_ids), user_auth=True, user_fields='public_metrics')
+            highest_followed_nonmuted = max(response['data'],
+                                            key=lambda x: x['public_metrics']['followers_count'])['username']
 
             # Select top 2 followed accounts from top_10, excluding the ones already selected
             filtered_top_10 = [handle for handle in top_10 if
-                               handle not in top_followed_muted_handles and handle != highest_followed_nonmuted]
+                               handle not in top_4_muted_handles and handle != highest_followed_nonmuted]
             selected_non_muted_handles = filtered_top_10[:2]
 
             # Concatenate all selected handles
-            all_handles = top_followed_muted_handles + [highest_followed_nonmuted] + selected_non_muted_handles
+            all_handles = top_4_muted_handles + [highest_followed_nonmuted] + selected_non_muted_handles
         return "$$$".join(all_handles)
     else:
         # Randomly select 7 accounts from the top_10 list
         all_handles = random.sample(top_10, 7)
         print(all_handles)
         return "$$$".join(all_handles)
-
-
-# @bp.errorhandler(500)
-# def internal_server_error(e):
-#     return render_template('error.html', error_message=f'uncaught exception: {e}'), 500
 
 
 @bp.after_request

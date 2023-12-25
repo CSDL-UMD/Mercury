@@ -9,6 +9,7 @@ import time
 import json
 import tweepy
 from datetime import datetime
+
 from . import database
 from .configuration import configuration
 
@@ -53,10 +54,10 @@ def mute_users():
 
         with open(f'/home/ubuntu/mercury-develop/data/muting_job/muted_results/results_{user_id}.json', 'a') as f:
             mute_results = []
-            count = 0
             for target_user_id in target_user_ids:
                 try:
-                    success_mute_status = client.mute(target_user_id=target_user_id).data['muting']
+                    response = client.mute(target_user_id=target_user_id)
+                    success_mute_status = response['data']['muting']
                     mute_results.append({
                         'user_id': user_id,
                         'target_user_id': target_user_id,
@@ -65,17 +66,12 @@ def mute_users():
                     print(mute_results)
                 except Exception as e:
                     print(f"Error: {e} for {user_id} muting {target_user_id}")
-                count += 1
-                # Check if the count reaches 44, then sleep for 15 minutes
-                if count % 44 == 0:
-                    print("Reached rate limit, sleeping for 15 minutes...")
-                    time.sleep(900)  # Sleep for 15 minutes
             json.dump(mute_results, f, indent=4)
 
         # Store muted information
         muted_response = client.get_muted()
-        muted_list = [muted_response.data[i].id for i in range(muted_response.meta['result_count'])]
-        num_muted = muted_response.meta['result_count']
+        muted_list = [muted_response['data'][i]['id'] for i in range(muted_response['meta']['result_count'])]
+        num_muted = muted_response['meta']['result_count']
         time_day = datetime.now().date()
         muted_dict = {
             "user_id": user_id,

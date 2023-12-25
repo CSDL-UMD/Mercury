@@ -39,7 +39,7 @@ def initdb():
     """ Initializes the database using bundled schema.sql file """
     db = getdb()
     with current_app.open_resource('schema.sql') as f:
-        db.execute(f.read.decode('utf8'))
+        db.execute(f.read().decode('utf8'))
 
 
 @click.command("init-db")

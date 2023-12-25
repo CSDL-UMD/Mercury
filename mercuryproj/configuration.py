@@ -16,7 +16,7 @@ config_path = os.path.join(config_dir, config_fn)
 if not os.path.exists(config_path):
     logging.error("No configuration file found! Initializing from sample...")
     sample_config_fn = "config_sample.ini"
-    sample_config_path = files("mercuryproj.samples").joinpath(sample_config_fn)
+    sample_config_path = str(files("mercuryproj.samples").joinpath(sample_config_fn))
     import shutil
     shutil.copy(sample_config_path, config_path)
     logging.info(f"Blank configuration file initialized at {config_path}. Exiting.")

@@ -11,35 +11,23 @@ Automation from 6 days after the start of Wave 2:
 import json
 import os
 import pandas as pd
-import requests
 import tweepy
-from configparser import ConfigParser
 from datetime import datetime, timedelta
-from flask import Blueprint, url_for
+import logging
+from platformdirs import user_data_dir
 
-bp = Blueprint("compliance", __name__, url_prefix="/compliance")
-
-
-def config(filename='database.ini', section='postgresql'):
-    # create a parser
-    parser = ConfigParser()
-    # read config file
-    parser.read(filename)
-
-    # get section, default to postgresql
-    db = {}
-    if parser.has_section(section):
-        params = parser.items(section)
-        for param in params:
-            db[param[0]] = param[1]
-    else:
-        raise Exception('Section {0} not found in the {1} file'.format(section, filename))
-
-    return db
+from . import database
+from .configuration import configuration
 
 
-# put the full path in this module
-webInformation = config('/home/ubuntu/mercury-develop/config.ini', 'webconfiguration')
+webInformation = configuration['webconfiguration']
+cred = configuration['twitterapp']
+
+
+data_dir = user_data_dir(appname=__package__)
+if not os.path.exists(data_dir):
+    logging.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
+    os.mkdir(data_dir)
 
 
 dm1_text = """We are writing to remind you about these tips that will help you to better evaluate the headlines you see on social media. Please read the information below carefully. We will invite you to take part in our next survey in approximately three weeks.
@@ -147,13 +135,10 @@ def dm1():
     """
     This function retrieves newly updated users (from a week ago), and send DMs to these users.
     """
-    user_ids_list = requests.get(url_for('database.get_users_from_week', _external=True))
+    user_ids_list = database.get_users_from_week()
     user_list = user_ids_list.json()
-    print(user_list)
-
+    logging.info(f'DM1 - Users from a week ago: {user_list=}')
     # Make a client for DM
-    cred = config('/home/ubuntu/mercury-develop/config.ini', 'twitterapp')
-
     client_dm = tweepy.Client(
         consumer_key=cred['key'],
         consumer_secret=cred['key_secret'],
@@ -161,22 +146,17 @@ def dm1():
         access_token_secret=cred['access_token_secret'],
         wait_on_rate_limit=True
     )
-
     # For each user, iterate the following:
     for user_id in user_list:
         # Get each user's randomized group info
-        insert_group_payload = {"user_id": user_id}
-        randomized_group_info = requests.get(url_for('database.get_randomized_group', _external=True),
-                                             params=insert_group_payload)
+        randomized_group_info = database.get_randomized_group(user_id=user_id)
         response = randomized_group_info.json()
-
-        # If the user is in media_literacy group, send dm1_text
         if response == "media_literacy":
+            # If the user is in media_literacy group, send dm1_text
             text = dm1_text
             dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
             dm1_timestamp = datetime.now()  # Get current time
             timestamp = dm1_timestamp.date()
-
             dm_conversation_id = dm.data['dm_conversation_id']
             dm_event_id = dm.data['dm_event_id']
             text_type = "dm1_text"
@@ -187,7 +167,10 @@ def dm1():
                 'timestamp': [timestamp],
                 'type': [text_type]
             })
-            directory = "/home/ubuntu/mercury-develop/mercuryproj/dm"
+            directory = f"{data_dir}/dm"
+            if not os.path.exists(directory):
+                logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+                os.mkdir(directory)
             csv_path = os.path.join(directory, 'dm1.csv')
             df.to_csv(csv_path, mode='a', header=False, index=False)
         else:
@@ -196,7 +179,6 @@ def dm1():
             dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
             dm1_timestamp = datetime.now()
             timestamp = dm1_timestamp.date()
-
             dm_conversation_id = dm.data['dm_conversation_id']
             dm_event_id = dm.data['dm_event_id']
             text_type = 'non_dm1_text'
@@ -207,19 +189,19 @@ def dm1():
                 'timestamp': [timestamp],
                 'type': [text_type]
             })
-            directory = "/home/ubuntu/mercury-develop/mercuryproj/dm"
+            directory = f"{data_dir}/dm"
+            if not os.path.exists(directory):
+                logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+                os.mkdir(directory)
             csv_path = os.path.join(directory, 'dm1.csv')
             df.to_csv(csv_path, mode='a', header=False, index=False)
-
-        print(f"Sending the first DM to {user_id} is done.")
+        logging.info(f'Sending the first DM1 to {user_list=} is done.')
 
 
 def dm2():
+    logging.info('Sending DM2 initiated')
     file_path = '/home/ubuntu/mercury-develop/mercuryproj/dm/dm1.csv'
     dm1_list = pd.read_csv(file_path)
-
-    cred = config('/home/ubuntu/mercury-develop/config.ini', 'twitterapp')
-
     client_dm = tweepy.Client(
         consumer_key=cred['key'],
         consumer_secret=cred['key_secret'],
@@ -227,24 +209,19 @@ def dm2():
         access_token_secret=cred['access_token_secret'],
         wait_on_rate_limit=True
     )
-
     for _, row in dm1_list.iterrows():
-
         timestamp = datetime.strptime(row['timestamp'], '%Y-%m-%d').date()
-
         # Only for user_ids who received first DM 7 days before
         if datetime.now().date() - timestamp == timedelta(days=7):
             user_id = row['user_id']
-
             try:
                 # Check DM event to retrieve meta info
                 dm1_response = client_dm.get_direct_message_events(participant_id=user_id)
                 dm1_count = dm1_response.meta['result_count']
                 # If dm1_count is larger than 1, there is response
             except Exception as e:
-                print(f"Error: {e}")
+                logging.error(f'Retrieving DM1 count for {user_id=}: ' + str(e))
                 dm1_count = "error"
-
             # Type
             if row['type'] == "non_dm1_text":
                 text = non_dm2_text
@@ -254,12 +231,11 @@ def dm2():
                 text_type = 'dm2_text'
             else:
                 continue
-
             # Send Direct Message
+            logging.info(f'Sending DM2 for {user_id=}')
             dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
-            dm1_timestamp = datetime.now()
-            timestamp = dm1_timestamp.date()
-
+            dm_timestamp = datetime.now()
+            timestamp = dm_timestamp.date()
             # Store DM info
             dm_conversation_id = dm.data['dm_conversation_id']
             dm_event_id = dm.data['dm_event_id']
@@ -271,18 +247,22 @@ def dm2():
                 'type': [text_type],
                 'dm1_count': [dm1_count]
             })
-
             # Save to dm2.csv
-            directory = "/home/ubuntu/mercury-develop/mercuryproj/dm"
+            directory = f"{data_dir}/dm"
+            if not os.path.exists(directory):
+                logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+                os.mkdir(directory)
             csv_path = os.path.join(directory, 'dm2.csv')
             df.to_csv(csv_path, mode='a', header=False, index=False)
 
 
 def dm3():
-    file_path = '/home/ubuntu/mercury-develop/mercuryproj/dm/dm2.csv'
-    dm2_list = pd.read_csv(file_path)
-    cred = config('/home/ubuntu/mercury-develop/config.ini', 'twitterapp')
-
+    logging.info('Sending DM3 initiated')
+    directory = f"{data_dir}/dm"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
+    dm2_list = pd.read_csv(f'{directory}/dm2.csv')
     client_dm = tweepy.Client(
         consumer_key=cred['key'],
         consumer_secret=cred['key_secret'],
@@ -292,17 +272,14 @@ def dm3():
     )
     for _, row in dm2_list.iterrows():
         timestamp = datetime.strptime(row['timestamp'], '%Y-%m-%d').date()
-
         if datetime.now().date() - timestamp == timedelta(days=7):
             user_id = row['user_id']
-
             try:
                 dm2_response = client_dm.get_direct_message_events(participant_id=user_id)
                 dm2_count = dm2_response.meta['result_count']
             except Exception as e:
-                print(f"Error: {e}")
+                logging.error(f'Retrieving DM2 count for {user_id=}: ' + str(e))
                 dm2_count = "error"
-
             # Type
             if row['type'] == "non_dm2_text":
                 text = non_dm3_text
@@ -312,18 +289,16 @@ def dm3():
                 text_type = 'dm3_text'
             else:
                 continue
-
             # Send Direct Message
+            logging.info(f'Sending DM3 for {user_id=}')
             dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
             dm_timestamp = datetime.now()
             timestamp = dm_timestamp.date()
-
             # Compliance
             if isinstance(dm2_count, int) and isinstance(row['dm1_count'], int):
                 compliance = "yes" if dm2_count - row['dm1_count'] > 1 else "no"
             else:
                 compliance = "unknown"
-
             # Save DM info
             dm_conversation_id = dm.data['dm_conversation_id']
             dm_event_id = dm.data['dm_event_id']
@@ -336,34 +311,30 @@ def dm3():
                 'dm2_count': [dm2_count],
                 'compliance': [compliance]
             })
-
             # Save to dm3.csv
-            directory = "/home/ubuntu/mercury-develop/mercuryproj/dm"
+            directory = f"{data_dir}/dm"
+            if not os.path.exists(directory):
+                logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+                os.mkdir(directory)
             csv_path = os.path.join(directory, 'dm3.csv')
             df.to_csv(csv_path, mode='a', header=False, index=False)
 
 
 def mute_compliance():
+    logging.info('Mute compliance initiated')
     # Retrieve mute state: compliance check only for "Done"
-    users = requests.get(url_for('database.get_mute_state', _external=True)).json()
+    users = database.get_mute_state().json()
     all_users_state = users.get("users_state", [])
     user_ids = [user_info["user_id"] for user_info in all_users_state if user_info["state"] == "Done"]
-
     for user_id in user_ids:
-        print(user_id)
-        response = requests.get(url_for('database.get_access_token', _external=True),
-                                params={'user_id': user_id})
+        logging.info(f'Checking muting compliance for {user_id=}')
+        response = database.get_access_token(user_id=user_id)
         access_token_response = response.json()
-
         if 'error' in access_token_response:
             raise Exception(access_token_response['error'])
-
         # Store the user's tokens
         access_token = access_token_response['access_token']
         access_token_secret = access_token_response['access_token_secret']
-
-        cred = config('/home/ubuntu/mercury-develop/config.ini', 'twitterapp')
-
         # Make a tweepy client
         client = tweepy.Client(
             consumer_key=cred['key'],
@@ -373,7 +344,6 @@ def mute_compliance():
             return_type=dict,
             wait_on_rate_limit=True
         )
-
         muted_response = client.get_muted()
         muted_list = [muted_response.data[i].id for i in range(muted_response.meta['result_count'])]
         num_muted = muted_response.meta['result_count']
@@ -384,23 +354,22 @@ def mute_compliance():
             "num_muted": num_muted,
             "timestamp": time_day
         }
-
         # Bring the most recent compliance file
-        directory = "/home/ubuntu/mercury-develop/data/muting_job/compliance"
+        directory = f"{data_dir}/muting_job/compliance"
+        if not os.path.exists(directory):
+            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+            os.mkdir(directory)
         file_list = [f for f in os.listdir(directory) if f.startswith(f"file_{user_id}_")]
         if file_list:
             max_time_day_file = max(file_list, key=lambda x: x.rsplit('_', 1)[-1])
             file_path = os.path.join(directory, max_time_day_file)
-
             with open(file_path, 'r') as f:
                 saved_data = json.load(f)
-
             # To compare:
             saved_data_str = json.dumps(saved_data, sort_keys=True)
             muted_dict_str = json.dumps(muted_dict, sort_keys=True)
-
             if saved_data_str == muted_dict_str:
-                print(f"compliance check for {user_id}: pass!")
+                logging.info(f"Mute compliance check for {user_id=}: pass!")
             else:
                 compliance = False
                 muted_dict = {
@@ -411,12 +380,11 @@ def mute_compliance():
                     "compliance": compliance
                 }
                 # Save:
-                file_path = f"/home/ubuntu/mercury-develop/data/muting_job/compliance/file_{user_id}_{time_day}.json"
+                file_path = f"{directory}/file_{user_id}_{time_day}.json"
                 with open(file_path, 'w') as f:
                     f.write(json.dumps(muted_dict, indent=4))
-
         else:
-            print(f"No files found for user_id {user_id}")
+            logging.info(f'No files found for {user_id=}')
 
 
 # Main function

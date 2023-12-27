@@ -1,54 +1,37 @@
 """
 This module contains functionality for muting.
-
-From Wave 2 start day to last day:
-- `mute_users()`: every 4 hours
-
 """
-
-import time
 import json
-import requests
-import tweepy
-from configparser import ConfigParser
+import os
+from tweepy.asynchronous import AsyncClient
 from datetime import datetime
-from flask import url_for
+import logging
+from platformdirs import user_data_dir
+
+from . import database
+from .configuration import configuration
+
+webInformation = configuration['webconfiguration']
+cred = configuration['twitterapp']
 
 
-def config(filename='database.ini', section='postgresql'):
-    # create a parser
-    parser = ConfigParser()
-    # read config file
-    parser.read(filename)
-
-    # get section, default to postgresql
-    db = {}
-    if parser.has_section(section):
-        params = parser.items(section)
-        for param in params:
-            db[param[0]] = param[1]
-    else:
-        raise Exception('Section {0} not found in the {1} file'.format(section, filename))
-
-    return db
+data_dir = user_data_dir(appname=__package__)
+if not os.path.exists(data_dir):
+    logging.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
+    os.mkdir(data_dir)
 
 
-webInformation = config('/home/ubuntu/mercury-develop/config.ini',
-                        'webconfiguration')
-
-
-def mute_users():
+async def mute_users():
     # Getting newly updated users for muting
-    users = requests.get(url_for('database.get_mute_state', _external=True)).json()
+    users = database.get_mute_state()
     all_users_state = users.get("users_state", [])
-
     # Filter user_ids with state="New"
     new_users = [user_info["user_id"] for user_info in all_users_state if user_info["state"] == "New"]
-
+    tasks = {}  # user_id: client, target_user_ids
     for user_id in new_users:
-        print(user_id)
-        response = requests.get(url_for('database.get_access_token', _external=True), params={'user_id': user_id})
-        access_token_response = response.json()
+        logging.info(f"Muting job for {user_id=} started!")
+        response = database.get_access_token(user_id)
+        access_token_response = response.get_json()
 
         if 'error' in access_token_response:
             raise Exception(access_token_response['error'])
@@ -57,10 +40,7 @@ def mute_users():
         access_token = access_token_response['access_token']
         access_token_secret = access_token_response['access_token_secret']
 
-        cred = config('/home/ubuntu/mercury-develop/config.ini', 'twitterapp')
-
-        # Make a tweepy client
-        client = tweepy.Client(
+        client = AsyncClient(
             consumer_key=cred['key'],
             consumer_secret=cred['key_secret'],
             access_token=access_token,
@@ -69,42 +49,42 @@ def mute_users():
             wait_on_rate_limit=True
         )
         # Retrieve list of accounts that should be muted
-        directory = "/home/ubuntu/mercury-develop/data/muting_job"
+        directory = f"{data_dir}/muting_job/muted_accounts"
+        if not os.path.exists(directory):
+            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+            os.mkdir(directory)
         with open(f'{directory}/muted_accounts_for_{user_id}.json', 'r') as f:
             sampled_muting_list = json.load(f)
-
         # Extract 'target_user_id'
         target_user_ids = [item['target_user_id'] for item in sampled_muting_list]
-
-        with open(f'/home/ubuntu/mercury-develop/data/muting_job/muted_results/results_{user_id}.json', 'a') as f:
-            mute_results = []
-            count = 0
-
-            for target_user_id in target_user_ids:
-                try:
-                    success_mute_status = client.mute(target_user_id=target_user_id).data['muting']
-                    mute_results.append({
-                        'user_id': user_id,
-                        'target_user_id': target_user_id,
-                        'success_mute_status': success_mute_status
-                    })
-                    print(mute_results)
-                except Exception as e:
-                    print(f"Error: {e} for {user_id} muting {target_user_id}")
-
-                count += 1
-
-                # Check if the count reaches 44, then sleep for 15 minutes
-                if count % 44 == 0:
-                    print("Reached rate limit, sleeping for 15 minutes...")
-                    time.sleep(900)  # Sleep for 15 minutes
-
+        tasks[user_id] = (client, target_user_ids, [])
+        database.store_mute_state(user_id=user_id, state="In Progress")
+    for user_id in tasks:
+        client, target_user_ids, mute_results = tasks[user_id]
+        if len(target_user_ids) > 0:
+            target_user_id = target_user_ids.pop()
+            try:
+                response = await client.mute(target_user_id=target_user_id)
+                success_mute_status = response['data']['muting']
+                mute_results.append({
+                    'user_id': user_id,
+                    'target_user_id': target_user_id,
+                    'success_mute_status': success_mute_status
+                })
+            except Exception as e:
+                logging.error(f"Error: {e} for {user_id=} muting {target_user_id=}")
+    for user_id in tasks:
+        client, target_user_ids, mute_results = tasks[user_id]
+        directory = f"{data_dir}/muting_job/muted_results"
+        if not os.path.exists(directory):
+            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+            os.mkdir(directory)
+        with open(f'{directory}/results_{user_id}.json', 'a') as f:
             json.dump(mute_results, f, indent=4)
 
-        # Store muted information
-        muted_response = client.get_muted()
-        muted_list = [muted_response.data[i].id for i in range(muted_response.meta['result_count'])]
-        num_muted = muted_response.meta['result_count']
+        muted_response = await client.get_muted()
+        muted_list = [muted_response['data'][i]['id'] for i in range(muted_response['meta']['result_count'])]
+        num_muted = muted_response['meta']['result_count']
         time_day = datetime.now().date()
         muted_dict = {
             "user_id": user_id,
@@ -113,15 +93,17 @@ def mute_users():
             "timestamp": time_day
         }
         # Save initial status for compliance check:
-        file_path = f"/home/ubuntu/mercury-develop/data/muting_job/compliance/file_{user_id}_{time_day}.json"
+        directory = f"{data_dir}/muting_job/compliance"
+        if not os.path.exists(directory):
+            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+            os.mkdir(directory)
+        file_path = f"{directory}/file_{user_id}_{time_day}.json"
         with open(file_path, 'w') as f:
             f.write(json.dumps(muted_dict, indent=4))
-
         # Store in DB:
-        response = requests.get(url_for('database.store_mute_result', _external=True), params=muted_dict)
-
+        response = database.store_mute_result(**muted_dict)
         # Check if the response indicates success
         if response.json().get('message') == "Data inserted successfully":
             # Update state in store_mute_state
-            requests.get(url_for('database.store_mute_state', _external=True),
-                         params={'user_id': user_id, 'state': 'Done'})
+            database.store_mute_state(user_id=user_id, state="Done")
+            logging.info(f"Muting job for {user_id=} is done!")

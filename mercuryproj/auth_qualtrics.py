@@ -1,72 +1,54 @@
-"""
-This script is a Flask application that handles user authentication with Twitter's OAuth API,
-and performs certain actions on behalf of the authenticated users.
-
-It provides following functionalities:
-"""
-
+import time
+from importlib.resources import files
+from requests_oauthlib import OAuth1Session
 import json
 import logging
 import os
-import random
-import time
-from configparser import ConfigParser
-from datetime import datetime
-import tweepy
 import pandas as pd
-import requests
-from flask import render_template, request, Blueprint, url_for
-from requests_oauthlib import OAuth1Session
-from importlib.resources import files
+import random
+import tweepy
+from datetime import datetime
+from flask import abort, request, Blueprint
+from platformdirs import user_data_dir
+
+from . import database
+from .configuration import configuration
 
 bp = Blueprint("auth_qualtrics", __name__, url_prefix="/auth_qualtrics")
 
 
-def config(filename='database.ini', section='postgresql'):
-    # create a parser
-    parser = ConfigParser()
-    # read config file
-    parser.read(filename)
-
-    # get section, default to postgresql
-    db = {}
-    if parser.has_section(section):
-        params = parser.items(section)
-        for param in params:
-            db[param[0]] = param[1]
-    else:
-        raise Exception('Section {0} not found in the {1} file'.format(section, filename))
-
-    return db
-
-
-webInformation = config('/home/ubuntu/mercury-develop/config.ini', 'webconfiguration')
+webInformation = configuration['webconfiguration']
+cred = configuration['twitterapp']
 
 app_callback_url_qual = str(webInformation['qualcallback'])
 request_token_url = str(webInformation['request_token_url'])
 access_token_url = str(webInformation['access_token_url'])
 authorize_url = str(webInformation['authorize_url'])
 
-oauth_store = {}
-screenname_store = {}
-userid_store = {}
-access_token_store = {}
-access_token_secret_store = {}
 
-processed_users = {}
+data_dir = user_data_dir(appname=__package__)
+if not os.path.exists(data_dir):
+    logging.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
+    os.mkdir(data_dir)
 
 
 def process_user_id(user_id):
     """
-    Wave 1
     Randomized sampling of headlines for each user_id
     :return: sampled_df (sampled headlines for the user_id)
     """
-    if user_id in processed_users:
-        print(f"User ID {user_id} is already processed.")
-        return processed_users[user_id]
-
-    with open(files("mercuryproj.data").joinpath("headline.json"), mode='r') as f:
+    # Define the directory where user data files are saved
+    directory = f"{data_dir}/headlines_user"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
+    filepath = os.path.join(directory, f"data_{user_id}.json")
+    # Check if user data already exists
+    if os.path.exists(filepath):
+        print(f"User ID {user_id} data file already exists. Skipping processing.")
+        return None
+    # Load data from headline.json
+    with open(str(files("mercuryproj.data").joinpath("headline.json")), mode='r') as f:
         data = json.load(f)
 
     df_headline = pd.DataFrame(data)
@@ -84,8 +66,6 @@ def process_user_id(user_id):
     sampled_df['wave'] = wave
     sampled_df['user_id'] = user_id
 
-    processed_users[user_id] = sampled_df
-
     return sampled_df
 
 
@@ -93,10 +73,8 @@ def process_user_id(user_id):
 def auth_start():
     """
     Initiates the OAuth 1.0a authentication process with Twitter.
-
     :return: oauth_token sent to the Qualtrics survey
     """
-    cred = config('/home/ubuntu/mercury-develop/config.ini', 'twitterapp')
     content = []
     try:
         request_token = OAuth1Session(client_key=cred['key'], client_secret=cred['key_secret'])
@@ -109,11 +87,14 @@ def auth_start():
     data_tokens = content.text.split("&")
 
     print(data_tokens)
-
     oauth_token = data_tokens[0].split("=")[1]
     oauth_token_secret = data_tokens[1].split("=")[1]
-    oauth_store[oauth_token] = oauth_token_secret
-    screenname_store[oauth_token] = "####"
+
+    insert_auth_payload = {
+        'oauth_token': oauth_token,
+        'oauth_token_secret': oauth_token_secret,
+    }
+    database.auth_temp(**insert_auth_payload)
     return oauth_token
 
 
@@ -128,14 +109,12 @@ def qualcallback():
     oauth_denied = request.args.get('denied')
 
     if oauth_denied:
-        if oauth_denied in oauth_store:
-            del oauth_store[oauth_denied]
+        logging.info('oauth denied!')
         return "<script>window.onload = window.close();</script>"
 
-    oauth_token_secret = oauth_store[oauth_token]
-
-    cred = config('/home/ubuntu/mercury-develop/config.ini', 'twitterapp')
-
+    # Retrieve oauth_token_secret from DB using oauth_token as the key
+    oauth_token_secret = database.get_oauth_token_secret(oauth_token)
+    print(oauth_token_secret)
     oauth_access_tokens = OAuth1Session(client_key=cred['key'], client_secret=cred['key_secret'],
                                         resource_owner_key=oauth_token, resource_owner_secret=oauth_token_secret,
                                         verifier=oauth_verifier)
@@ -149,11 +128,6 @@ def qualcallback():
     user_id = access_token[2].split("=")[1]
     screen_name = access_token[3].split("=")[1]
 
-    screenname_store[oauth_token] = screen_name
-    userid_store[oauth_token] = user_id
-    access_token_store[oauth_token] = real_oauth_token
-    access_token_secret_store[oauth_token] = real_oauth_token_secret
-    del oauth_store[oauth_token]
     print(real_oauth_token)
     timestamp = datetime.now().isoformat()
 
@@ -162,35 +136,40 @@ def qualcallback():
         'screen_name': screen_name,
         'access_token': real_oauth_token,
         'access_token_secret': real_oauth_token_secret,
-        'session_start': timestamp}
+        'oauth_token': oauth_token,
+        'session_start': timestamp
+    }
+    database.insert_user(**insert_user_payload)
 
-    requests.get(url_for('database.insert_user', _external=True), params=insert_user_payload)
+    # once done, delete the temporary tokens in DB
+    database.delete_auth_temp(oauth_token)
     return "<script>window.onload = window.close();</script>"
 
 
 @bp.route('/auth_screenname', methods=['GET', 'POST'])
 def auth_screenname():
     oauth_token_qualtrics = request.args.get('oauth_token')
-
+    # Find oauth_token from db
     try:
-        screen_name_return = screenname_store[oauth_token_qualtrics]
-    except KeyError:
-        return "No data found for token", 404
+        user_details = database.get_user_details(oauth_token_qualtrics)
+        if user_details:
+            # Extracting details from user_details
+            screen_name_return = user_details['screen_name']
+            userid_return = user_details['user_id']
+            access_token_return = user_details['access_token']
+            access_token_secret_return = user_details['access_token_secret']
 
-    print("SCREEN NAME CALLED!!!")
-    print(screen_name_return)
+            print("Hello, ", screen_name_return)
+            return f"{screen_name_return}$$$" + str(
+                userid_return) + "$$$" + access_token_return + "$$$" + access_token_secret_return
+        else:
+            # Handle case where no data is found
+            return "No data found for token", 404
 
-    if screen_name_return == "####":
-        return screen_name_return
-
-    userid_return = userid_store[oauth_token_qualtrics]
-    access_token_return = access_token_store[oauth_token_qualtrics]
-    access_token_secret_return = access_token_secret_store[oauth_token_qualtrics]
-
-    print("Hello")
-
-    return screen_name_return + "$$$" + str(
-        userid_return) + "$$$" + access_token_return + "$$$" + access_token_secret_return
+    except Exception as e:
+        # Log the exception and return an error message
+        logging.error(f"Error retrieving user details: {e}")
+        return "An error occurred", 500
 
 
 @bp.route('/following', methods=['POST'])
@@ -198,12 +177,12 @@ def following():
     """
     Wave 1
     """
-    user_id = request.args.get('user_id')
-
-    # Get access token from DB via /get_access_token route
-    response = requests.get(url_for('database.get_access_token', _external=True),
-                            params={'user_id': user_id})
-    access_token_response = response.json()
+    if "user_id" in request.args:
+        user_id = request.args.get("user_id").strip()
+    else:
+        abort(500, "No user_id specified. Aborting.")
+    response = database.get_access_token(user_id)
+    access_token_response = response.get_json()
     print("access_token_response:")
     print(access_token_response)
 
@@ -214,8 +193,6 @@ def following():
     access_token = access_token_response['access_token']
     access_token_secret = access_token_response['access_token_secret']
 
-    cred = config('/home/ubuntu/mercury-develop/config.ini', 'twitterapp')
-
     # make a tweepy client
     client = tweepy.Client(
             consumer_key=cred['key'],
@@ -223,10 +200,8 @@ def following():
             access_token=access_token,
             access_token_secret=access_token_secret,
             return_type=dict)
-
     # target_follow_id: Mercury study account!
     target_follow_id = "1691551574550519808"
-
     # Try the following
     success = False
     for attempt in range(3):  # Try up to 3 times
@@ -244,20 +219,15 @@ def following():
     # If all attempts failed and success is still False, assign response to success.
     if not success:
         success = "Failed"
-
     # log the day
     timestamp = datetime.now().isoformat()
-
     # store in DB:
     insert_following_payload = {
         "user_id": user_id,
         "success": success,
         "session_start": timestamp
     }
-
-    requests.get(url_for('database.store_following', _external=True),
-                 params=insert_following_payload)
-
+    database.store_following(**insert_following_payload)
     response_message = "Successfully followed!"  # return this anyway to turn the page
     return response_message
 
@@ -267,20 +237,27 @@ def randomize_headline():
     """
     Wave 1
     """
-    user_id = request.args.get("user_id").strip()
+    if "user_id" in request.args:
+        user_id = request.args.get("user_id").strip()
+    else:
+        abort(500, "No user_id specified. Aborting.")
 
     sampled_df = process_user_id(user_id)
-    print(sampled_df)
+
+    # Check if the user was already processed
+    if sampled_df is None:
+        return "User already processed."
 
     result_dict = sampled_df.to_dict('records')
 
     # Set the directory where the files will be saved
-    directory = "/home/ubuntu/mercury-develop/data/headlines_user"
-
+    directory = f"{data_dir}/headlines_user"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
     # Save the result to a JSON file per user:
     with open(os.path.join(directory, f"data_{user_id}.json"), 'w') as f:
         f.write(json.dumps(result_dict, indent=4))
-
     return "Finished sampling headlines"
 
 
@@ -294,7 +271,11 @@ def get_sampled_headlines():
     print(user_id)
     print(wave)
     # Load the data from the JSON file
-    file_path = os.path.join("/home/ubuntu/mercury-develop/data/headlines_user", f"data_{user_id}.json")
+    directory = f"{data_dir}/headlines_user"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
+    file_path = os.path.join(directory, f"data_{user_id}.json")
     with open(file_path.format(user_id), 'r') as f:
         data = json.load(f)
     # Extract the user_id, file, and wave information
@@ -318,7 +299,7 @@ def get_sampled_headlines():
         resp_return = f"{files_wave[0]}$$${files_wave[1]}$$${files_wave[2]}$$${files_wave[3]}$$${files_wave[4]}$$${files_wave[5]}$$${files_wave[6]}$$${files_wave[7]}$$${files_wave[8]}$$${files_wave[9]}$$${files_wave[10]}$$${files_wave[11]}"
     else:
         print("Invalid wave value")
-    print(f"HERE'S {user_id}'S HEADLINES FOR THE WAVE:")
+    print(f"HERE'S {user_id}'S HEADLINES FOR THE WAVE {wave}:")
     print(resp_return)
     return resp_return
 
@@ -340,11 +321,9 @@ def store_group():
     insert_group_payload = {
         "user_id": user_id,
         "randomized_group": randomized_group,
-        "timestamp": current_timestamp
+        "session_start": current_timestamp
     }
-    requests.get(url_for('database.store_randomized_group', _external=True),
-                 params=insert_group_payload)
-
+    database.store_randomized_group(**insert_group_payload)
     return "Stored Randomized Groups with Timestamp"
 
 
@@ -359,43 +338,36 @@ def mute_group():
     """
     user_id = request.args.get("user_id").strip()
     state = request.args.get("state").strip()
-
     # store in DB:
     insert_group_payload = {
         "user_id": user_id,
         "state": state
     }
-    requests.get(url_for('database.store_mute_state', _external=True),
-                 params=insert_group_payload)
-    inventory = pd.read_csv(files("mercuryproj.data").joinpath("updated_inventory.csv"))
+    database.store_mute_state(**insert_group_payload)
+    # retrieve low quality accounts inventory
+    inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")))
     inventory = inventory.sort_values(by='followers', ascending=False)
-
     num_groups = len(inventory) // 10
-
     muted_list = []
-
-    end_idx = 311
-
+    end_idx = 311       # initial number
     for j in range(num_groups):
         # Select each group of 10 accounts and sample a fraction without replacement
         start_idx = j * 10
         end_idx = (j + 1) * 10
-
         group_df = inventory.iloc[start_idx:end_idx]
-
         sample_df = group_df.sample(frac=0.7, replace=False)
         muted_list.extend(sample_df.to_dict('records'))
-
     # If we have not reached the total samples, add more from the remaining data
     while len(muted_list) < 219:
         remaining_samples = 219 - len(muted_list)
         remaining_df = inventory.iloc[end_idx:]  # Remaining data after the last group
         extra_samples = remaining_df.sample(n=min(len(remaining_df), remaining_samples), replace=False)
         muted_list.extend(extra_samples.to_dict('records'))
-
     # Set the directory where the files will be saved
-    directory = "/home/ubuntu/mercury-develop/data/muting_job"
-
+    directory = f"{data_dir}/muting_job/muted_accounts"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
     # Save the result to a JSON file per user:
     with open(os.path.join(directory, f"muted_accounts_for_{user_id}.json"), 'w') as f:
         f.write(json.dumps(muted_list, indent=4))
@@ -409,13 +381,8 @@ def get_userid():
     Returns: user_id
     """
     vsid = request.args.get("vsid")
-    print(vsid)
-    # Get access token from DB via /get_access_token route
-    response = requests.get(url_for('database.get_user_info', _external=True),
-                            params={'vsid': vsid})
-    user_info = response.json()
-    print(user_info)
-    return str(user_info)
+    user_info = database.get_user_info(vsid)
+    return user_info
 
 
 @bp.route('/get_group', methods=['GET', 'POST'])
@@ -423,15 +390,18 @@ def get_group():
     """
     wave 3
     """
-    user_id = request.args.get("user_id").strip()
+    # XXX do the same in other functions -GLC
+    if "user_id" in request.args:
+        user_id = request.args.get("user_id").strip()
+    else:
+        abort(500, "No user_id specified. Aborting.")
 
     # store in DB:
     insert_group_payload = {
         "user_id": user_id,
     }
-    randomized_group_info = requests.get(url_for('database.get_randomized_group', _external=True), params=insert_group_payload)
-
-    return str(randomized_group_info)
+    randomized_group_info = database.get_randomized_group(**insert_group_payload)
+    return randomized_group_info
 
 
 @bp.route('/follow_politifact', methods=['POST'])
@@ -439,24 +409,14 @@ def follow_politifact():
     """
     In Wave 3, if respondents click the follow button, we follow @PolitiFact on behalf of them.
     """
-    user_id = request.args.get("user_id").strip()
-
-    # Get access token from DB via /get_access_token route
-    response = requests.get(url_for("database.get_access_token", _external=True), params={'user_id': user_id})
-
-    access_token_response = response.json()
-    print("access_token_response:")
-    print(access_token_response)
-
-    if 'error' in access_token_response:
-        raise Exception(access_token_response['error'])
-
-    # Store the user's tokens
+    if "user_id" in request.args:
+        user_id = request.args.get("user_id").strip()
+    else:
+        abort(500, "No user_id specified. Aborting.")
+    response = database.get_access_token(user_id)
+    access_token_response = response.get_json()
     access_token = access_token_response['access_token']
     access_token_secret = access_token_response['access_token_secret']
-
-    cred = config('/home/ubuntu/mercury-develop/config.ini', 'twitterapp')
-
     # make a tweepy client
     client = tweepy.Client(
         consumer_key=cred['key'],
@@ -464,10 +424,8 @@ def follow_politifact():
         access_token=access_token,
         access_token_secret=access_token_secret,
         return_type=dict)
-
     # target_follow_id: @PolitiFact
     target_follow_id = "8953122"
-
     # Try the following
     success = False
     for attempt in range(3):  # Try up to 3 times
@@ -485,19 +443,15 @@ def follow_politifact():
     # If all attempts failed and success is still False, assign response to success.
     if not success:
         success = "Failed"
-
     # log the time
     timestamp = datetime.now().isoformat()
-
     # store in DB:
     insert_following_payload = {
         "user_id": user_id,
         "success": success,
         "session_start": timestamp
     }
-
-    requests.get(url_for('database.store_follow_politifact', _external=True), params=insert_following_payload)
-
+    database.store_follow_politifact(**insert_following_payload)
     response_message = "Successfully followed!"  # return this anyway to turn the page
     return response_message
 
@@ -507,68 +461,86 @@ def get_exposure():
     """
     Wave 3
     """
-    user_id = request.args.get("user_id").strip()
-
+    if "user_id" in request.args:
+        user_id = request.args.get("user_id").strip()
+    else:
+        abort(500, "No user_id specified. Aborting.")
     # Get randomized group
-    insert_group_payload = {"user_id": user_id}
-    randomized_group_response = requests.get(url_for('database.get_randomized_group', _external=True),
-                                             params=insert_group_payload)
-    randomized_group = randomized_group_response.text
-
+    randomized_group = database.get_randomized_group(user_id)
+    print(randomized_group)
     top_10 = ["CGTNOfficial", "XHNews", "TuckerCarlson", "PDChina", "SeanHannity", "wikileaks",
               "dbongino", "IngrahamAngle", "rt_com", "republic"]
 
     if randomized_group in ["muting_treatment1", "muting_treatment2"]:
         # Load the muted accounts data
-        muted_accounts_file = f"/home/ubuntu/mercury-develop/data/muting_job/muted_accounts_for_{user_id}.json"
-        muted_accounts = []
-        if os.path.exists(muted_accounts_file):
-            with open(muted_accounts_file, 'r') as file:
-                muted_data = json.load(file)
-            muted_accounts = [account["target_user_id"] for account in muted_data]
+        directory = f"{data_dir}/muting_job/muted_accounts"
+        if not os.path.exists(directory):
+            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+            os.mkdir(directory)
+        muted_accounts_file = os.path.join(directory, f"muted_accounts_for_{user_id}.json")
+        with open(muted_accounts_file, 'r') as file:
+            muted_data = json.load(file)
 
         # Load hometimeline match data
-        hometimeline_match_file = f"/home/ubuntu/mercury-develop/data/eligibility/hometimeline_match/match_for_{user_id}.json"
-        lq_followed_and_muted = 'F'
+        directory = f"{data_dir}/eligibility/hometimeline_match"
+        if not os.path.exists(directory):
+            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+            os.mkdir(directory)
+        hometimeline_match_file = os.path.join(directory, f"match_for_{user_id}.json")
         author_ids = []
         matched_accounts = []
-        if os.path.exists(hometimeline_match_file):
-            with open(hometimeline_match_file, 'r') as file:
-                hometimeline_data = json.load(file)
+        with open(hometimeline_match_file, 'r') as file:
+            hometimeline_data = json.load(file)
 
-            # Extracting author_ids and checking if they are in muted_accounts
-            author_ids = [item["author_id"] for item in hometimeline_data]
-            matched_accounts = [author_id for author_id in author_ids if int(author_id) in muted_accounts]
+        # Loop through the dictionary and add the IDs to author_ids
+        for ids in hometimeline_data.values():
+            author_ids.extend(ids)
 
-            # Update lq_followed_and_muted based on whether any matches were found
-            lq_followed_and_muted = 'T' if matched_accounts else 'F'
+        # author_ids: a list of strings & integers for data type match
+        author_ids = set(int(author_id) for author_id in author_ids)
+
+        # Iterate through each account in muted_data to find matched accounts
+        for account in muted_data:
+            target_user_id = account["target_user_id"]
+            if target_user_id in author_ids:
+                matched_accounts.append(target_user_id)  # Add the matched account
+
+        # Update lq_followed_and_muted based on whether any matches were found
+        lq_followed_and_muted = 'T' if matched_accounts else 'F'
 
         if lq_followed_and_muted == 'T':
+            # Convert matched accounts to a set of integers for comparison
+            matched_accounts_set = set(matched_accounts)
+
+            # Filter the muted data to find the matched accounts details
+            matched_accounts_details = [account for account in muted_data if
+                                        account["target_user_id"] in matched_accounts_set]
+
             # Find the highest followed account from matched accounts in muted_accounts
-            highest_followed_account = max([muted_accounts[int(account_id)] for account_id in matched_accounts],
-                                           key=lambda x: x["followers"])
+            highest_followed_account = max(matched_accounts_details, key=lambda x: x["followers"])
             highest_followed_handle = highest_followed_account["twitter_handle"]
 
-            # Select top 3 followed accounts from remaining muted accounts, excluding the highest followed one
-            remaining_muted_accounts = [account for account in muted_data if
-                                        account["twitter_handle"] != highest_followed_handle]
-            top_followed_muted_handles = sorted(remaining_muted_accounts, key=lambda x: x["followers"],
-                                                reverse=True)[:3]
-            top_followed_muted_handles = [account["twitter_handle"] for account in top_followed_muted_handles]
+            # Select top 3 accounts from remaining muted accounts from muted_data, excluding the highest followed one
+            remaining_muted_accounts = [account for account in muted_data if account["twitter_handle"] != highest_followed_handle]
 
-            # Select the first two accounts from top_10 that are not in the muted_accounts
+            # Now select the top 3 followed accounts from the remaining muted accounts
+            top_3_muted_handles = sorted(remaining_muted_accounts, key=lambda x: x["followers"], reverse=True)[:3]
+            top_3_muted_handles = [account["twitter_handle"] for account in top_3_muted_handles]
+
+            # Select the three accounts from top_10 that are not in the muted_accounts
             non_muted_handles = [handle for handle in top_10 if
                                  handle not in [account["twitter_handle"] for account in muted_data]]
-            selected_non_muted_handles = non_muted_handles[:3]
+            non_muted_handles = non_muted_handles[:3]
 
             # Concatenate all selected handles
-            all_handles = [highest_followed_handle] + top_followed_muted_handles + selected_non_muted_handles
+            all_handles = [highest_followed_handle] + top_3_muted_handles + non_muted_handles
+            return "$$$".join(all_handles)
         else:
             # Select top 4 followed accounts from muted accounts
-            top_followed_muted_handles = sorted([account["twitter_handle"] for account in muted_data],
-                                                key=lambda x: x["followers"], reverse=True)[:4]
+            top_4_muted_accounts = sorted(muted_data, key=lambda x: x['followers'], reverse=True)[:4]
+            top_4_muted_handles = [account['twitter_handle'] for account in top_4_muted_accounts]
+
             # Select top 1 followed accounts that are non-muted
-            cred = config('/home/ubuntu/mercury-develop/config.ini', 'twitterapp')
             client = tweepy.Client(
                 consumer_key=cred['key'],
                 consumer_secret=cred['key_secret'],
@@ -577,29 +549,23 @@ def get_exposure():
                 return_type=dict,
                 wait_on_rate_limit=True
             )
-            response = client.get_users(ids=author_ids, user_auth=True, user_fields='public_metrics')
-            highest_followed_nonmuted = ''
-            if 'data' in response:
-                highest_followed_nonmuted = max(response['data'],
-                                                key=lambda x: x['public_metrics']['followers_count'])['username']
+            response = client.get_users(ids=list(author_ids), user_auth=True, user_fields='public_metrics')
+            highest_followed_nonmuted = max(response['data'],
+                                            key=lambda x: x['public_metrics']['followers_count'])['username']
 
             # Select top 2 followed accounts from top_10, excluding the ones already selected
             filtered_top_10 = [handle for handle in top_10 if
-                               handle not in top_followed_muted_handles and handle != highest_followed_nonmuted]
+                               handle not in top_4_muted_handles and handle != highest_followed_nonmuted]
             selected_non_muted_handles = filtered_top_10[:2]
 
             # Concatenate all selected handles
-            all_handles = top_followed_muted_handles + [highest_followed_nonmuted] + selected_non_muted_handles
+            all_handles = top_4_muted_handles + [highest_followed_nonmuted] + selected_non_muted_handles
         return "$$$".join(all_handles)
     else:
         # Randomly select 7 accounts from the top_10 list
         all_handles = random.sample(top_10, 7)
+        print(all_handles)
         return "$$$".join(all_handles)
-
-
-@bp.errorhandler(500)
-def internal_server_error(e):
-    return render_template('error.html', error_message=f'uncaught exception: {e}'), 500
 
 
 @bp.after_request

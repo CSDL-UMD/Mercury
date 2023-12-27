@@ -1,22 +1,24 @@
 from flask import Flask
 import logging
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 
 def create_app():
-    app_dev = Flask(__name__)
+    app = Flask(__name__)
 
-    app_dev.debug = True
-
-    log_level = logging.INFO
-    logging.basicConfig(filename='mercuryproj.log', level=log_level)
-
-    from . import auth_qualtrics
-    app_dev.register_blueprint(auth_qualtrics.bp)
+    app.debug = True
+    logging.basicConfig(level=logging.INFO)
 
     from . import database
-    app_dev.register_blueprint(database.bp)
+    database.init_app(app)
 
-    return app_dev
+    from . import auth_qualtrics
+    app.register_blueprint(auth_qualtrics.bp)
+
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
+    )
+    return app
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ From Wave 2 start day to last day:
 import json
 import tweepy
 from datetime import datetime
+import logging
 
 from . import database
 from .configuration import configuration
@@ -23,7 +24,7 @@ def mute_users():
     # Filter user_ids with state="New"
     new_users = [user_info["user_id"] for user_info in all_users_state if user_info["state"] == "New"]
     for user_id in new_users:
-        print(user_id)
+        logging.info(f"Muting job for {user_id=} started!")
         response = database.get_access_token(user_id)
         access_token_response = response.get_json()
 
@@ -62,9 +63,8 @@ def mute_users():
                         'target_user_id': target_user_id,
                         'success_mute_status': success_mute_status
                     })
-                    print(mute_results)
                 except Exception as e:
-                    print(f"Error: {e} for {user_id} muting {target_user_id}")
+                    logging.error(f"Error: {e} for {user_id=} muting {target_user_id=}")
             json.dump(mute_results, f, indent=4)
 
         # Store muted information
@@ -88,3 +88,4 @@ def mute_users():
         if response.json().get('message') == "Data inserted successfully":
             # Update state in store_mute_state
             database.store_mute_state(user_id=user_id, state="Done")
+            logging.info(f"Muting job for {user_id=} is done!")

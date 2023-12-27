@@ -1,5 +1,6 @@
 from flask import Flask
 import logging
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 
 def create_app():
@@ -14,6 +15,9 @@ def create_app():
     from . import auth_qualtrics
     app.register_blueprint(auth_qualtrics.bp)
 
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
+    )
     return app
 
 

@@ -14,6 +14,7 @@ import pandas as pd
 import tweepy
 from datetime import datetime, timedelta
 import logging
+from platformdirs import user_data_dir
 
 from . import database
 from .configuration import configuration
@@ -21,6 +22,12 @@ from .configuration import configuration
 
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
+
+
+data_dir = user_data_dir(appname=__package__)
+if not os.path.exists(data_dir):
+    logging.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
+    os.mkdir(data_dir)
 
 
 dm1_text = """We are writing to remind you about these tips that will help you to better evaluate the headlines you see on social media. Please read the information below carefully. We will invite you to take part in our next survey in approximately three weeks.
@@ -160,7 +167,10 @@ def dm1():
                 'timestamp': [timestamp],
                 'type': [text_type]
             })
-            directory = "/home/ubuntu/mercury-develop/mercuryproj/dm"
+            directory = f"{data_dir}/dm"
+            if not os.path.exists(directory):
+                logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+                os.mkdir(directory)
             csv_path = os.path.join(directory, 'dm1.csv')
             df.to_csv(csv_path, mode='a', header=False, index=False)
         else:
@@ -179,7 +189,10 @@ def dm1():
                 'timestamp': [timestamp],
                 'type': [text_type]
             })
-            directory = "/home/ubuntu/mercury-develop/mercuryproj/dm"
+            directory = f"{data_dir}/dm"
+            if not os.path.exists(directory):
+                logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+                os.mkdir(directory)
             csv_path = os.path.join(directory, 'dm1.csv')
             df.to_csv(csv_path, mode='a', header=False, index=False)
         logging.info(f'Sending the first DM1 to {user_list=} is done.')
@@ -235,15 +248,21 @@ def dm2():
                 'dm1_count': [dm1_count]
             })
             # Save to dm2.csv
-            directory = "/home/ubuntu/mercury-develop/mercuryproj/dm"
+            directory = f"{data_dir}/dm"
+            if not os.path.exists(directory):
+                logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+                os.mkdir(directory)
             csv_path = os.path.join(directory, 'dm2.csv')
             df.to_csv(csv_path, mode='a', header=False, index=False)
 
 
 def dm3():
     logging.info('Sending DM3 initiated')
-    file_path = '/home/ubuntu/mercury-develop/mercuryproj/dm/dm2.csv'
-    dm2_list = pd.read_csv(file_path)
+    directory = f"{data_dir}/dm"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
+    dm2_list = pd.read_csv(f'{directory}/dm2.csv')
     client_dm = tweepy.Client(
         consumer_key=cred['key'],
         consumer_secret=cred['key_secret'],
@@ -293,7 +312,10 @@ def dm3():
                 'compliance': [compliance]
             })
             # Save to dm3.csv
-            directory = "/home/ubuntu/mercury-develop/mercuryproj/dm"
+            directory = f"{data_dir}/dm"
+            if not os.path.exists(directory):
+                logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+                os.mkdir(directory)
             csv_path = os.path.join(directory, 'dm3.csv')
             df.to_csv(csv_path, mode='a', header=False, index=False)
 
@@ -333,7 +355,10 @@ def mute_compliance():
             "timestamp": time_day
         }
         # Bring the most recent compliance file
-        directory = "/home/ubuntu/mercury-develop/data/muting_job/compliance"
+        directory = f"{data_dir}/muting_job/compliance"
+        if not os.path.exists(directory):
+            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+            os.mkdir(directory)
         file_list = [f for f in os.listdir(directory) if f.startswith(f"file_{user_id}_")]
         if file_list:
             max_time_day_file = max(file_list, key=lambda x: x.rsplit('_', 1)[-1])

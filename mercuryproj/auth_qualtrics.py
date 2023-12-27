@@ -1,8 +1,6 @@
 import time
 from importlib.resources import files
-
 from requests_oauthlib import OAuth1Session
-
 import json
 import logging
 import os
@@ -11,6 +9,7 @@ import random
 import tweepy
 from datetime import datetime
 from flask import abort, request, Blueprint
+from platformdirs import user_data_dir
 
 from . import database
 from .configuration import configuration
@@ -27,13 +26,22 @@ access_token_url = str(webInformation['access_token_url'])
 authorize_url = str(webInformation['authorize_url'])
 
 
+data_dir = user_data_dir(appname=__package__)
+if not os.path.exists(data_dir):
+    logging.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
+    os.mkdir(data_dir)
+
+
 def process_user_id(user_id):
     """
-    Wave  - Randomized sampling of headlines for each user_id
+    Randomized sampling of headlines for each user_id
     :return: sampled_df (sampled headlines for the user_id)
     """
     # Define the directory where user data files are saved
-    directory = "/home/ubuntu/mercury-develop/data/headlines_user"
+    directory = f"{data_dir}/headlines_user"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
     filepath = os.path.join(directory, f"data_{user_id}.json")
     # Check if user data already exists
     if os.path.exists(filepath):
@@ -243,8 +251,10 @@ def randomize_headline():
     result_dict = sampled_df.to_dict('records')
 
     # Set the directory where the files will be saved
-    directory = "/home/ubuntu/mercury-develop/data/headlines_user"
-
+    directory = f"{data_dir}/headlines_user"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
     # Save the result to a JSON file per user:
     with open(os.path.join(directory, f"data_{user_id}.json"), 'w') as f:
         f.write(json.dumps(result_dict, indent=4))
@@ -261,7 +271,11 @@ def get_sampled_headlines():
     print(user_id)
     print(wave)
     # Load the data from the JSON file
-    file_path = os.path.join("/home/ubuntu/mercury-develop/data/headlines_user", f"data_{user_id}.json")
+    directory = f"{data_dir}/headlines_user"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
+    file_path = os.path.join(directory, f"data_{user_id}.json")
     with open(file_path.format(user_id), 'r') as f:
         data = json.load(f)
     # Extract the user_id, file, and wave information
@@ -350,7 +364,10 @@ def mute_group():
         extra_samples = remaining_df.sample(n=min(len(remaining_df), remaining_samples), replace=False)
         muted_list.extend(extra_samples.to_dict('records'))
     # Set the directory where the files will be saved
-    directory = "/home/ubuntu/mercury-develop/data/muting_job/muted_accounts"
+    directory = f"{data_dir}/muting_job/muted_accounts"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
     # Save the result to a JSON file per user:
     with open(os.path.join(directory, f"muted_accounts_for_{user_id}.json"), 'w') as f:
         f.write(json.dumps(muted_list, indent=4))
@@ -456,12 +473,20 @@ def get_exposure():
 
     if randomized_group in ["muting_treatment1", "muting_treatment2"]:
         # Load the muted accounts data
-        muted_accounts_file = f"/home/ubuntu/mercury-develop/data/muting_job/muted_accounts/muted_accounts_for_{user_id}.json"
+        directory = f"{data_dir}/muting_job/muted_accounts"
+        if not os.path.exists(directory):
+            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+            os.mkdir(directory)
+        muted_accounts_file = os.path.join(directory, f"muted_accounts_for_{user_id}.json")
         with open(muted_accounts_file, 'r') as file:
             muted_data = json.load(file)
 
         # Load hometimeline match data
-        hometimeline_match_file = f"/home/ubuntu/mercury-develop/data/eligibility/hometimeline_match/match_for_{user_id}.json"
+        directory = f"{data_dir}/eligibility/hometimeline_match"
+        if not os.path.exists(directory):
+            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+            os.mkdir(directory)
+        hometimeline_match_file = os.path.join(directory, f"match_for_{user_id}.json")
         author_ids = []
         matched_accounts = []
         with open(hometimeline_match_file, 'r') as file:

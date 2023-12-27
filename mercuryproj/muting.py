@@ -5,7 +5,6 @@ From Wave 2 start day to last day:
 - `mute_users()`: every 4 hours
 
 """
-import time
 import json
 import tweepy
 from datetime import datetime

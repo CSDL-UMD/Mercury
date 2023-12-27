@@ -18,10 +18,13 @@ Then, based on this list,
 from importlib.resources import files
 import json
 import os
+import logging
 import pandas as pd
 import tweepy
 from csv import writer
 from datetime import datetime as dt
+from platformdirs import user_data_dir
+
 from . import database
 from .configuration import configuration
 
@@ -29,8 +32,18 @@ webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
 
 
+data_dir = user_data_dir(appname=__package__)
+if not os.path.exists(data_dir):
+    logging.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
+    os.mkdir(data_dir)
+
+
 def append_to_csv(user_id, criteria, pass_value):
-    with open("/home/ubuntu/mercury-develop/data/elibility/user_eligibility.csv", mode='a') as file:
+    directory = f"{data_dir}/elibility"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
+    with open(f"{directory}/user_eligibility.csv", mode='a') as file:
         row_writer = writer(file)
         row_writer.writerow([user_id, criteria, pass_value])
         file.close()
@@ -85,7 +98,11 @@ def save_user_info(user_id):
         append_to_csv(user_id, "user_info", False)
 
     row = [user_id, created_at_str, public_metrics]
-    with open("/home/ubuntu/mercury-develop/data/eligibility/user_info.csv", 'a') as f:
+    directory = f"{data_dir}/elibility"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
+    with open(f"{directory}/user_info.csv", 'a') as f:
         writer_obj = writer(f)
         writer_obj.writerow(row)
         f.close()
@@ -125,8 +142,10 @@ def get_muted_criteria(user_id):
     muted_dict = {"user_id": user_id, "already_muted": already_muted, "num_muted": num_muted}
 
     # Set the directory where the files will be saved
-    directory = "/home/ubuntu/mercury-develop/data/eligibility"
-
+    directory = f"{data_dir}/elibility"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
     # Save the result to a JSON file per user:
     with open(os.path.join(directory, f"already_muted_{user_id}.json"), 'w') as f:
         f.write(json.dumps(muted_dict, indent=4))
@@ -181,8 +200,11 @@ def reverse_chron(user_id):
                                  media_fields=media_fields,
                                  expansions=expansions,
                                  max_results=100)
-
-    with open(f'/home/ubuntu/mercury-develop/data/reverse-chron-data/reversechron-data-{user_id}.json', 'a') as outfile:
+    directory = f"{data_dir}/reverse-chron-data"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
+    with open(f'{directory}/reversechron-data-{user_id}.json', 'a') as outfile:
         arr = []
         for response in paginator.flatten(limit=400):
             if len(arr) < 400:
@@ -197,7 +219,11 @@ def home_timeline_match(user_id):
     After reverse_chron job is done
     """
     # Load JSON data
-    with open(f'/home/ubuntu/mercury-develop/data/reverse-chron-data/reversechron-data-{user_id}.json', 'r') as outfile:
+    directory = f"{data_dir}/reverse-chron-data"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
+    with open(f'{directory}/reversechron-data-{user_id}.json', 'r') as outfile:
         data = json.load(outfile)
     author_ids = [item['author_id'] for item in data]
 
@@ -216,13 +242,13 @@ def home_timeline_match(user_id):
     append_to_csv(user_id, "hometimeline", pass_value)
 
     # Saving the hometimeline_match information for each user_id
-    with open(f"/home/ubuntu/mercury-develop/data/eligibility/hometimeline_match/match_for_{user_id}.json", "w") as match_file:
+    directory = f"{data_dir}/eligibility/hometimeline_match"
+    with open(f"{directory}/match_for_{user_id}.json", "w") as match_file:
         json.dump({user_id: hometimeline_match}, match_file)
 
     return f'hometimeline match for {user_id} done!'
 
 
-# Main function
 def main():
     user_ids = []
     for user_id in user_ids:

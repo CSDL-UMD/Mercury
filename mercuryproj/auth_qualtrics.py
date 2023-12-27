@@ -1,10 +1,3 @@
-"""
-This script is a Flask application that handles user authentication with Twitter's OAuth API,
-and performs certain actions on behalf of the authenticated users.
-
-It provides following functionalities:
-"""
-
 import time
 from importlib.resources import files
 

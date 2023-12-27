@@ -2,8 +2,8 @@ DROP TABLE IF EXISTS auth_temp;
 
 CREATE TABLE auth_temp (
     id SERIAL PRIMARY KEY,
-    access_token VARCHAR(255),
-    access_token_secret VARCHAR(255)
+    oauth_token VARCHAR(255),
+    oauth_token_secret VARCHAR(255)
 );
 
 DROP TABLE IF EXISTS mercury_user;

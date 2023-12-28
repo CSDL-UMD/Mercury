@@ -1,7 +1,7 @@
 include mercuryproj/data/*.csv
 include mercuryproj/data/*.json
 include mercuryproj/dm/*.csv
-include samples/*.ini
+include mercuryproj/samples/*.ini
 include mercuryproj/schema.sql
 include mercuryproj/data/eligibility/*.csv
 

@@ -50,6 +50,7 @@ def append_to_csv(user_id, criteria, pass_value):
 
 
 def save_user_info(user_id):
+    logging.info(f'Saving user info for {user_id=}.')
     response = database.get_access_token(user_id)
     access_token_response = response.get_json()
 
@@ -80,7 +81,7 @@ def save_user_info(user_id):
     try:
         data = response['data']
     except Exception as e:
-        print(f'problem w/ indexing data: {e}')
+        logging.error(f'Problem w/ indexing data: {e} for {user_id=}.')
         return None
 
     created_at_str = data['created_at'].replace("Z", "UTC")
@@ -106,9 +107,11 @@ def save_user_info(user_id):
         writer_obj = writer(f)
         writer_obj.writerow(row)
         f.close()
+    logging.info(f'Saving user info for {user_id} done!')
 
 
 def get_muted_criteria(user_id):
+    logging.info(f'Getting muted accounts list for {user_id=}.')
     # Load inventory with target user ids
     inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")))
     target_user_ids = inventory["target_user_id"].tolist()
@@ -150,12 +153,10 @@ def get_muted_criteria(user_id):
     with open(os.path.join(directory, f"already_muted_{user_id}.json"), 'w') as f:
         f.write(json.dumps(muted_dict, indent=4))
         # Decide pass_value based on num_muted
-
     # store eligibility check result:
     pass_value = 'T' if num_muted <= 94 else 'F'
     append_to_csv(user_id, "already_muted", pass_value)
-
-    return muted_dict
+    logging.info(f'Getting muted accounts list for {user_id} done!')
 
 
 def reverse_chron(user_id):
@@ -165,6 +166,7 @@ def reverse_chron(user_id):
     Whatever tweets have been collected will then be dumped in the form of an array
     into the user's respective JSON file.
     """
+    logging.info(f'Collecting reverse chronological home timeline for {user_id=}.')
     response = database.get_access_token(user_id)
     access_token_response = response.get_json()
 
@@ -207,17 +209,19 @@ def reverse_chron(user_id):
     with open(f'{directory}/reversechron-data-{user_id}.json', 'a') as outfile:
         arr = []
         for response in paginator.flatten(limit=400):
-            if len(arr) < 400:
+            if len(arr) <= 400:
                 arr.append(response)
             else:
                 break
         json.dump(arr, outfile, indent=4)
+    logging.info(f'Reverse-chron job for {user_id} done!')
 
 
 def home_timeline_match(user_id):
     """
     After reverse_chron job is done
     """
+    logging.info(f'Looking for low-quality accounts in home timeline data for {user_id=}.')
     # Load JSON data
     directory = f"{data_dir}/reverse-chron-data"
     if not os.path.exists(directory):
@@ -245,12 +249,10 @@ def home_timeline_match(user_id):
     directory = f"{data_dir}/eligibility/hometimeline_match"
     with open(f"{directory}/match_for_{user_id}.json", "w") as match_file:
         json.dump({user_id: hometimeline_match}, match_file)
+    logging.info(f'Home timeline match for {user_id} done!')
 
-    return f'hometimeline match for {user_id} done!'
 
-
-def main():
-    user_ids = []
+def main(user_ids):
     for user_id in user_ids:
         save_user_info(user_id)
         get_muted_criteria(user_id)
@@ -259,4 +261,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(user_ids=[])

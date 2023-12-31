@@ -317,3 +317,17 @@ def get_users_from_week():
     cursor.close()
     # Return the list of user_ids
     return jsonify(user_ids)
+
+
+def get_session_start(user_id):
+    connection = getdb()
+    cursor = connection.cursor()
+    query = """
+        SELECT session_start
+        FROM randomized_group
+        WHERE user_id = %s;
+    """
+    cursor.execute(query, (user_id,))
+    session_start = cursor.fetchone()[0] if cursor.rowcount != 0 else None
+    cursor.close()
+    return session_start

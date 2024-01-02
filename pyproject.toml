@@ -16,7 +16,7 @@ dependencies = [
     "requests",
     "requests-oauthlib",
     "platformdirs",
-    "psycopg2"
+    "psycopg"
 ]
 readme = "README.md"
 requires-python = ">=3.10"

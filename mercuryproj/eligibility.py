@@ -18,10 +18,13 @@ Then, based on this list,
 from importlib.resources import files
 import json
 import os
+import logging
 import pandas as pd
 import tweepy
 from csv import writer
 from datetime import datetime as dt
+from platformdirs import user_data_dir
+
 from . import database
 from .configuration import configuration
 
@@ -29,14 +32,29 @@ webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
 
 
+data_dir = user_data_dir(appname=__package__)
+if not os.path.exists(data_dir):
+    logging.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
+    os.mkdir(data_dir)
+
+# Load inventory with target user ids
+inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")))
+target_user_ids = inventory["target_user_id"].tolist()
+
+
 def append_to_csv(user_id, criteria, pass_value):
-    with open("/home/ubuntu/mercury-develop/data/elibility/user_eligibility.csv", mode='a') as file:
+    directory = f"{data_dir}/elibility"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
+    with open(f"{directory}/user_eligibility.csv", mode='a') as file:
         row_writer = writer(file)
         row_writer.writerow([user_id, criteria, pass_value])
         file.close()
 
 
 def save_user_info(user_id):
+    logging.info(f'Saving user info for {user_id=}.')
     response = database.get_access_token(user_id)
     access_token_response = response.get_json()
 
@@ -67,7 +85,7 @@ def save_user_info(user_id):
     try:
         data = response['data']
     except Exception as e:
-        print(f'problem w/ indexing data: {e}')
+        logging.error(f'Problem w/ indexing data: {e} for {user_id=}.')
         return None
 
     created_at_str = data['created_at'].replace("Z", "UTC")
@@ -85,58 +103,76 @@ def save_user_info(user_id):
         append_to_csv(user_id, "user_info", False)
 
     row = [user_id, created_at_str, public_metrics]
-    with open("/home/ubuntu/mercury-develop/data/eligibility/user_info.csv", 'a') as f:
+    directory = f"{data_dir}/elibility"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
+    with open(f"{directory}/user_info.csv", 'a') as f:
         writer_obj = writer(f)
         writer_obj.writerow(row)
         f.close()
+    logging.info(f'Saving user info for {user_id} done!')
 
 
 def get_muted_criteria(user_id):
-    # Load inventory with target user ids
-    inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")))
-    target_user_ids = inventory["target_user_id"].tolist()
+    logging.info(f'Getting muted accounts list for {user_id=}.')
 
-    # Get access token from DB via /get_access_token route
-    response = database.get_access_token(user_id)
-    access_token_response = response.get_json()
+    try:
+        # Get access token from DB via /get_access_token route
+        response = database.get_access_token(user_id)
+        access_token_response = response.get_json()
 
-    if 'error' in access_token_response:
-        raise Exception(access_token_response['error'])
+        if 'error' in access_token_response:
+            logging.error(f"Error retrieving access token for {user_id}: {access_token_response['error']}")
+            return  # Skipping to the next user_id
 
-    # Store the user's tokens
-    access_token = access_token_response['access_token']
-    access_token_secret = access_token_response['access_token_secret']
+        # Store the user's tokens
+        access_token = access_token_response['access_token']
+        access_token_secret = access_token_response['access_token_secret']
 
-    # make a tweepy client
-    client = tweepy.Client(
-        consumer_key=cred['key'],
-        consumer_secret=cred['key_secret'],
-        access_token=access_token,
-        access_token_secret=access_token_secret,
-        return_type=dict,
-        wait_on_rate_limit=True
-    )
-    # Filter already muted accounts in the inventory
-    muted_response = client.get_muted()
-    already_muted_list = [muted_response['data'][i]['id'] for i in range(muted_response['meta']['result_count'])]
-    already_muted = [user_id for user_id in already_muted_list if user_id in target_user_ids]
-    num_muted = len(already_muted)
+        # Make a tweepy client
+        client = tweepy.Client(
+            consumer_key=cred['key'],
+            consumer_secret=cred['key_secret'],
+            access_token=access_token,
+            access_token_secret=access_token_secret,
+            return_type=dict,
+            wait_on_rate_limit=True
+        )
 
-    muted_dict = {"user_id": user_id, "already_muted": already_muted, "num_muted": num_muted}
+        # Attempt to retrieve the muted accounts
+        already_muted_list = []
+        try:
+            muted_response = client.get_muted()
+            if 'data' in muted_response and muted_response['meta']['result_count'] > 0:
+                already_muted_list = [m['id'] for m in muted_response['data'] if m['id'] in target_user_ids]
+        except tweepy.TweepyException as e:
+            logging.error(f"An error occurred getting muted list for {user_id=}: {e}")
+        except Exception as e:
+            logging.error(f"An unexpected error occurred for {user_id=}: {e}")
 
-    # Set the directory where the files will be saved
-    directory = "/home/ubuntu/mercury-develop/data/eligibility"
+        num_muted = len(already_muted_list)
+        muted_dict = {"user_id": user_id, "already_muted": already_muted_list, "num_muted": num_muted}
 
-    # Save the result to a JSON file per user:
-    with open(os.path.join(directory, f"already_muted_{user_id}.json"), 'w') as f:
-        f.write(json.dumps(muted_dict, indent=4))
+        # Set the directory where the files will be saved
+        directory = f"{data_dir}/eligibility"
+        if not os.path.exists(directory):
+            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+            os.mkdir(directory)
+
+        # Save the result to a JSON file per user
+        with open(os.path.join(directory, f"already_muted_{user_id}.json"), 'w') as f:
+            json.dump(muted_dict, f, indent=4)
+
         # Decide pass_value based on num_muted
+        pass_value = 'T' if num_muted <= 94 else 'F'
+        # Store eligibility check result:
+        append_to_csv(user_id, "already_muted", pass_value)  # ensure append_to_csv is defined or handled appropriately
 
-    # store eligibility check result:
-    pass_value = 'T' if num_muted <= 94 else 'F'
-    append_to_csv(user_id, "already_muted", pass_value)
+        logging.info(f'Getting muted accounts list for {user_id} done!')
 
-    return muted_dict
+    except Exception as e:
+        logging.error(f"An unexpected error occurred: {e}")
 
 
 def reverse_chron(user_id):
@@ -146,6 +182,7 @@ def reverse_chron(user_id):
     Whatever tweets have been collected will then be dumped in the form of an array
     into the user's respective JSON file.
     """
+    logging.info(f'Collecting reverse chronological home timeline for {user_id=}.')
     response = database.get_access_token(user_id)
     access_token_response = response.get_json()
 
@@ -181,27 +218,39 @@ def reverse_chron(user_id):
                                  media_fields=media_fields,
                                  expansions=expansions,
                                  max_results=100)
-
-    with open(f'/home/ubuntu/mercury-develop/data/reverse-chron-data/reversechron-data-{user_id}.json', 'a') as outfile:
+    directory = f"{data_dir}/reverse-chron-data"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
+    with open(f'{directory}/reversechron-data-{user_id}.json', 'a') as outfile:
         arr = []
-        for response in paginator.flatten(limit=400):
-            if len(arr) < 400:
-                arr.append(response)
-            else:
-                break
-        json.dump(arr, outfile, indent=4)
+        try:
+            for response in paginator.flatten(limit=400):
+                if len(arr) <= 400:
+                    arr.append(response)
+                else:
+                    break
+            json.dump(arr, outfile, indent=4)
+        except tweepy.TweepyException as e:
+            logging.error(f"An error occurred while reverse-chron for {user_id=}: {e}")
+        except Exception as e:
+            logging.error(f"An unexpected error occurred for {user_id=}: {e}")
+    logging.info(f'Reverse-chron job for {user_id} done!')
 
 
 def home_timeline_match(user_id):
     """
     After reverse_chron job is done
     """
+    logging.info(f'Looking for low-quality accounts in home timeline data for {user_id=}.')
     # Load JSON data
-    with open(f'/home/ubuntu/mercury-develop/data/reverse-chron-data/reversechron-data-{user_id}.json', 'r') as outfile:
+    directory = f"{data_dir}/reverse-chron-data"
+    if not os.path.exists(directory):
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.mkdir(directory)
+    with open(f'{directory}/reversechron-data-{user_id}.json', 'r') as outfile:
         data = json.load(outfile)
     author_ids = [item['author_id'] for item in data]
-
-    inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")))
 
     # Initialize empty list for matching target_user_ids
     hometimeline_match = []
@@ -216,15 +265,13 @@ def home_timeline_match(user_id):
     append_to_csv(user_id, "hometimeline", pass_value)
 
     # Saving the hometimeline_match information for each user_id
-    with open(f"/home/ubuntu/mercury-develop/data/eligibility/hometimeline_match/match_for_{user_id}.json", "w") as match_file:
+    directory = f"{data_dir}/eligibility/hometimeline_match"
+    with open(f"{directory}/match_for_{user_id}.json", "w") as match_file:
         json.dump({user_id: hometimeline_match}, match_file)
+    logging.info(f'Home timeline match for {user_id} done!')
 
-    return f'hometimeline match for {user_id} done!'
 
-
-# Main function
-def main():
-    user_ids = []
+def main(user_ids):
     for user_id in user_ids:
         save_user_info(user_id)
         get_muted_criteria(user_id)
@@ -233,4 +280,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(user_ids=[])

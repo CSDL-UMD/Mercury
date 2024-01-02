@@ -461,16 +461,12 @@ def get_exposure():
     """
     Wave 3
     """
-    if "user_id" in request.args:
-        user_id = request.args.get("user_id").strip()
-    else:
-        abort(500, "No user_id specified. Aborting.")
-    # Get randomized group
-    randomized_group = database.get_randomized_group(user_id)
-    print(randomized_group)
+    user_id = request.args.get("user_id").strip()
+    randomized_group = request.args.get("randomized_group").strip()
+    logging.info(f"Getting exposure of {user_id=} with {randomized_group=}")
+
     top_10 = ["CGTNOfficial", "XHNews", "TuckerCarlson", "PDChina", "SeanHannity", "wikileaks",
               "dbongino", "IngrahamAngle", "rt_com", "republic"]
-
     if randomized_group in ["muting_treatment1", "muting_treatment2"]:
         # Load the muted accounts data
         directory = f"{data_dir}/muting_job/muted_accounts"
@@ -534,7 +530,8 @@ def get_exposure():
 
             # Concatenate all selected handles
             all_handles = [highest_followed_handle] + top_3_muted_handles + non_muted_handles
-            return "$$$".join(all_handles)
+            all_handles_str = [str(handle) for handle in all_handles]  # Ensure all handles are strings
+            return "$$$".join(all_handles_str)
         else:
             # Select top 4 followed accounts from muted accounts
             top_4_muted_accounts = sorted(muted_data, key=lambda x: x['followers'], reverse=True)[:4]
@@ -560,11 +557,11 @@ def get_exposure():
 
             # Concatenate all selected handles
             all_handles = top_4_muted_handles + [highest_followed_nonmuted] + selected_non_muted_handles
-        return "$$$".join(all_handles)
+            all_handles_str = [str(handle) for handle in all_handles]  # Ensure all handles are strings
+        return "$$$".join(all_handles_str)
     else:
         # Randomly select 7 accounts from the top_10 list
         all_handles = random.sample(top_10, 7)
-        print(all_handles)
         return "$$$".join(all_handles)
 
 

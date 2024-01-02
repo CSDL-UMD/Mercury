@@ -4,4 +4,4 @@ include mercuryproj/dm/*.csv
 include mercuryproj/samples/*.ini
 include mercuryproj/schema.sql
 include mercuryproj/data/eligibility/*.csv
-
+exclude build/*

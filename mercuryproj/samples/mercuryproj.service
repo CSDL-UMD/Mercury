@@ -3,7 +3,7 @@ Description=Mercury Project Flask App
 
 [Service]
 Environment="ARGS=-w 4 'mercuryproj:create_app()' -b '0.0.0.0:5000'"
-ExecStart=/home/ubuntu/miniconda3/bin/gunicorn $ARGS
+ExecStart=/home/ubuntu/.venv/bin/gunicorn $ARGS
 
 # Disable Python's buffering of STDOUT and STDERR, so that output from the
 # service shows up immediately in systemd's logs

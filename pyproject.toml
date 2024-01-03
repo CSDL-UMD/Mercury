@@ -17,6 +17,7 @@ dependencies = [
     "requests-oauthlib",
     "platformdirs",
     "psycopg"
+    "flask-cors"
 ]
 readme = "README.md"
 requires-python = ">=3.10"
@@ -36,3 +37,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
+
+[project.scripts]
+compliance-run = "mercuryproj.compliance:main"
+muting-run = "mercuryproj.muting:main"

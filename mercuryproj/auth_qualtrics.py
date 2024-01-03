@@ -9,6 +9,7 @@ import random
 import tweepy
 from datetime import datetime
 from flask import abort, request, Blueprint
+from flask_cors import cross_origin
 from platformdirs import user_data_dir
 
 from . import database
@@ -24,6 +25,7 @@ app_callback_url_qual = str(webInformation['qualcallback'])
 request_token_url = str(webInformation['request_token_url'])
 access_token_url = str(webInformation['access_token_url'])
 authorize_url = str(webInformation['authorize_url'])
+survey_url = str(webInformation['survey_url'])
 
 
 data_dir = user_data_dir(appname=__package__)
@@ -386,6 +388,7 @@ def get_userid():
 
 
 @bp.route('/get_group', methods=['GET', 'POST'])
+@cross_origin(origins=['https://umdsurvey.umd.edu'])
 def get_group():
     """
     wave 3
@@ -457,6 +460,7 @@ def follow_politifact():
 
 
 @bp.route('/get_exposure', methods=['GET', 'POST'])
+@cross_origin(origins=[survey_url])
 def get_exposure():
     """
     Wave 3

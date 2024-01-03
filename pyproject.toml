@@ -16,7 +16,7 @@ dependencies = [
     "requests",
     "requests-oauthlib",
     "platformdirs",
-    "psycopg2",
+    "psycopg"
     "flask-cors"
 ]
 readme = "README.md"

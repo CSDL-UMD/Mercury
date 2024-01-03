@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timedelta
 
 import click
-import psycopg2
+import psycopg
 from flask import g, jsonify, current_app
 
 from .configuration import configuration
@@ -18,7 +18,7 @@ def getdb():
             sys.exit(1)
 
         logging.info(f'Connecting to database {db_params["database"]} on {db_params["host"]}:{db_params["port"]}.')
-        conn = psycopg2.connect(host=db_params["host"],
+        conn = psycopg.connect(host=db_params["host"],
                                 port=db_params["port"],
                                 database=db_params["database"],
                                 user=db_params["user"],

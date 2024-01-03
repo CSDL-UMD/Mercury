@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 import logging
 from platformdirs import user_data_dir
 
+from . import create_app
 from . import database
 from .configuration import configuration
 
@@ -388,12 +389,15 @@ def mute_compliance():
             logging.info(f'No files found for {user_id=}')
 
 
-# Main function
 def main():
-    dm1()
-    dm2()
-    dm3()
-    mute_compliance()
+    # Create an instance of your Flask app
+    app = create_app()
+    # Push an application context
+    with app.app_context():
+        dm1()
+        dm2()
+        dm3()
+        mute_compliance()
 
 
 if __name__ == "__main__":

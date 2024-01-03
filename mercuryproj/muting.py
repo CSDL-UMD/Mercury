@@ -7,6 +7,7 @@ from tweepy.asynchronous import AsyncClient
 from datetime import datetime
 import logging
 from platformdirs import user_data_dir
+import asyncio
 
 from . import database
 from .configuration import configuration
@@ -107,3 +108,11 @@ async def mute_users():
             # Update state in store_mute_state
             database.store_mute_state(user_id=user_id, state="Done")
             logging.info(f"Muting job for {user_id=} is done!")
+
+
+async def main():
+    await mute_users()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

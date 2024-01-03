@@ -36,3 +36,7 @@ include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
+
+[project.scripts]
+compliance-run = "mercuryproj.compliance:main"
+muting-run = "mercuryproj.muting:main"

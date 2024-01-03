@@ -16,7 +16,7 @@ dependencies = [
     "requests",
     "requests-oauthlib",
     "platformdirs",
-    "psycopg"
+    "psycopg",
     "flask-cors"
 ]
 readme = "README.md"
@@ -41,3 +41,6 @@ where = ["."]
 [project.scripts]
 compliance-run = "mercuryproj.compliance:main"
 muting-run = "mercuryproj.muting:main"
+engagements-run = "mercuryproj.engagements:main"
+eligibility-run = "mercuryproj.eligibility:main"
+

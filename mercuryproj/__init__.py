@@ -15,6 +15,9 @@ def create_app():
     from . import auth_qualtrics
     app.register_blueprint(auth_qualtrics.bp)
 
+    from . import health
+    app.register_blueprint(health.bp)
+
     app.wsgi_app = ProxyFix(
         app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
     )

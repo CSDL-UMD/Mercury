@@ -17,7 +17,8 @@ dependencies = [
     "requests-oauthlib",
     "platformdirs",
     "psycopg",
-    "flask-cors"
+    "flask-cors",
+    "gunicorn"
 ]
 readme = "README.md"
 requires-python = ">=3.10"

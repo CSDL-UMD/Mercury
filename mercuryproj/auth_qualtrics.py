@@ -31,7 +31,7 @@ survey_url = str(webInformation['survey_url'])
 data_dir = user_data_dir(appname=__package__)
 if not os.path.exists(data_dir):
     logging.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
-    os.mkdir(data_dir)
+    os.makedirs(data_dir)
 
 
 def process_user_id(user_id):

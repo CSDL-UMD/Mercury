@@ -10,17 +10,14 @@ Automation from 6 days after the start of Wave 2:
 """
 
 import json
-import os
-import pandas as pd
-import tweepy
-from datetime import datetime, timedelta
 import logging
+import os
+import tweepy
+from datetime import datetime
 from platformdirs import user_data_dir
-
 from . import create_app
 from . import database
 from .configuration import configuration
-
 
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
@@ -137,8 +134,7 @@ def dm1():
     """
     This function retrieves newly updated users (from a week ago), and send DMs to these users.
     """
-    user_ids_list = database.get_users_from_week()
-    user_list = user_ids_list.json()
+    user_list = database.get_users_from_week()
     logging.info(f'DM1 - Users from a week ago: {user_list=}')
     # Make a client for DM
     client_dm = tweepy.Client(
@@ -151,8 +147,7 @@ def dm1():
     # For each user, iterate the following:
     for user_id in user_list:
         # Get each user's randomized group info
-        randomized_group_info = database.get_randomized_group(user_id=user_id)
-        response = randomized_group_info.json()
+        response = database.get_randomized_group(user_id=user_id)
         if response == "media_literacy":
             # If the user is in media_literacy group, send dm1_text
             text = dm1_text
@@ -162,19 +157,15 @@ def dm1():
             dm_conversation_id = dm.data['dm_conversation_id']
             dm_event_id = dm.data['dm_event_id']
             text_type = "dm1_text"
-            df = pd.DataFrame({
-                'user_id': [user_id],
-                'dm_conversation_id': [dm_conversation_id],
-                'dm_event_id': [dm_event_id],
-                'timestamp': [timestamp],
-                'type': [text_type]
-            })
-            directory = f"{data_dir}/dm"
-            if not os.path.exists(directory):
-                logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-                os.mkdir(directory)
-            csv_path = os.path.join(directory, 'dm1.csv')
-            df.to_csv(csv_path, mode='a', header=False, index=False)
+            # store in DB:
+            insert_dm1_payload = {
+                "user_id": user_id,
+                "conversation_id": dm_conversation_id,
+                "event_id": dm_event_id,
+                "timestamp": timestamp,
+                "text_type": text_type
+            }
+            database.store_dm1(**insert_dm1_payload)
         else:
             # If the user is not media_literacy group:
             text = non_dm1_text
@@ -184,26 +175,21 @@ def dm1():
             dm_conversation_id = dm.data['dm_conversation_id']
             dm_event_id = dm.data['dm_event_id']
             text_type = 'non_dm1_text'
-            df = pd.DataFrame({
-                'user_id': [user_id],
-                'dm_conversation_id': [dm_conversation_id],
-                'dm_event_id': [dm_event_id],
-                'timestamp': [timestamp],
-                'type': [text_type]
-            })
-            directory = f"{data_dir}/dm"
-            if not os.path.exists(directory):
-                logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-                os.mkdir(directory)
-            csv_path = os.path.join(directory, 'dm1.csv')
-            df.to_csv(csv_path, mode='a', header=False, index=False)
+            # store in DB:
+            insert_dm1_payload = {
+                "user_id": user_id,
+                "conversation_id": dm_conversation_id,
+                "event_id": dm_event_id,
+                "timestamp": timestamp,
+                "text_type": text_type
+            }
+            database.store_dm1(**insert_dm1_payload)
         logging.info(f'Sending the first DM1 to {user_list=} is done.')
 
 
 def dm2():
-    logging.info('Sending DM2 initiated')
-    file_path = '/home/ubuntu/mercury-develop/mercuryproj/dm/dm1.csv'
-    dm1_list = pd.read_csv(file_path)
+    user_info_list = database.get_dm1()
+    logging.info(f'DM1 - Users from a week ago: {user_info_list=}')
     client_dm = tweepy.Client(
         consumer_key=cred['key'],
         consumer_secret=cred['key_secret'],
@@ -211,60 +197,47 @@ def dm2():
         access_token_secret=cred['access_token_secret'],
         wait_on_rate_limit=True
     )
-    for _, row in dm1_list.iterrows():
-        timestamp = datetime.strptime(row['timestamp'], '%Y-%m-%d').date()
-        # Only for user_ids who received first DM 7 days before
-        if datetime.now().date() - timestamp == timedelta(days=7):
-            user_id = row['user_id']
-            try:
-                # Check DM event to retrieve meta info
-                dm1_response = client_dm.get_direct_message_events(participant_id=user_id)
-                dm1_count = dm1_response.meta['result_count']
-                # If dm1_count is larger than 1, there is response
-            except Exception as e:
-                logging.error(f'Retrieving DM1 count for {user_id=}: ' + str(e))
-                dm1_count = "error"
-            # Type
-            if row['type'] == "non_dm1_text":
-                text = non_dm2_text
-                text_type = 'non_dm2_text'
-            elif row['type'] == "dm1_text":
-                text = dm2_text
-                text_type = 'dm2_text'
-            else:
-                continue
-            # Send Direct Message
-            logging.info(f'Sending DM2 for {user_id=}')
-            dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
-            dm_timestamp = datetime.now()
-            timestamp = dm_timestamp.date()
-            # Store DM info
-            dm_conversation_id = dm.data['dm_conversation_id']
-            dm_event_id = dm.data['dm_event_id']
-            df = pd.DataFrame({
-                'user_id': [user_id],
-                'dm_conversation_id': [dm_conversation_id],
-                'dm_event_id': [dm_event_id],
-                'timestamp': [timestamp],
-                'type': [text_type],
-                'dm1_count': [dm1_count]
-            })
-            # Save to dm2.csv
-            directory = f"{data_dir}/dm"
-            if not os.path.exists(directory):
-                logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-                os.mkdir(directory)
-            csv_path = os.path.join(directory, 'dm2.csv')
-            df.to_csv(csv_path, mode='a', header=False, index=False)
+    for user_id, text_type in user_info_list:
+        try:
+            # Check DM event to retrieve meta info
+            dm1_response = client_dm.get_direct_message_events(participant_id=user_id)
+            dm1_count = str(dm1_response.meta['result_count'])
+            # If dm1_count is larger than 1, there is a response
+        except Exception as e:
+            logging.error(f'Retrieving DM1 count for {user_id=}: ' + str(e))
+            dm1_count = "error"
+
+        # Determine the type of message to send based on text_type
+        if text_type == "non_dm1_text":
+            text = non_dm2_text
+            text_type = 'non_dm2_text'
+        elif text_type == "dm1_text":
+            text = dm2_text
+            text_type = 'dm2_text'
+        else:
+            continue  # If the text_type is not recognized, skip to the next iteration
+
+        # Send Direct Message
+        logging.info(f'Sending DM2 for {user_id=}')
+        dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
+        dm_timestamp = datetime.now()
+        timestamp = dm_timestamp.date()
+
+        # Store DM info using a new store_dm2 function to be created in the database module
+        database.store_dm2(
+            user_id=user_id,
+            conversation_id=dm.data['dm_conversation_id'],
+            event_id=dm.data['dm_event_id'],
+            timestamp=timestamp,
+            text_type=text_type,
+            dm1_count=dm1_count
+        )
 
 
 def dm3():
-    logging.info('Sending DM3 initiated')
-    directory = f"{data_dir}/dm"
-    if not os.path.exists(directory):
-        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-        os.mkdir(directory)
-    dm2_list = pd.read_csv(f'{directory}/dm2.csv')
+    # Fetch the list of users and their text types who received a DM2 a week ago
+    user_info_list = database.get_dm2()
+    logging.info(f'DM2 - Users from a week ago: {user_info_list=}')
     client_dm = tweepy.Client(
         consumer_key=cred['key'],
         consumer_secret=cred['key_secret'],
@@ -272,54 +245,40 @@ def dm3():
         access_token_secret=cred['access_token_secret'],
         wait_on_rate_limit=True
     )
-    for _, row in dm2_list.iterrows():
-        timestamp = datetime.strptime(row['timestamp'], '%Y-%m-%d').date()
-        if datetime.now().date() - timestamp == timedelta(days=7):
-            user_id = row['user_id']
-            try:
-                dm2_response = client_dm.get_direct_message_events(participant_id=user_id)
-                dm2_count = dm2_response.meta['result_count']
-            except Exception as e:
-                logging.error(f'Retrieving DM2 count for {user_id=}: ' + str(e))
-                dm2_count = "error"
-            # Type
-            if row['type'] == "non_dm2_text":
-                text = non_dm3_text
-                text_type = 'non_dm3_text'
-            elif row['type'] == "dm2_text":
-                text = dm3_text
-                text_type = 'dm3_text'
-            else:
-                continue
-            # Send Direct Message
-            logging.info(f'Sending DM3 for {user_id=}')
-            dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
-            dm_timestamp = datetime.now()
-            timestamp = dm_timestamp.date()
-            # Compliance
-            if isinstance(dm2_count, int) and isinstance(row['dm1_count'], int):
-                compliance = "yes" if dm2_count - row['dm1_count'] > 1 else "no"
-            else:
-                compliance = "unknown"
-            # Save DM info
-            dm_conversation_id = dm.data['dm_conversation_id']
-            dm_event_id = dm.data['dm_event_id']
-            df = pd.DataFrame({
-                'user_id': [user_id],
-                'dm_conversation_id': [dm_conversation_id],
-                'dm_event_id': [dm_event_id],
-                'timestamp': [timestamp],
-                'type': [text_type],
-                'dm2_count': [dm2_count],
-                'compliance': [compliance]
-            })
-            # Save to dm3.csv
-            directory = f"{data_dir}/dm"
-            if not os.path.exists(directory):
-                logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-                os.mkdir(directory)
-            csv_path = os.path.join(directory, 'dm3.csv')
-            df.to_csv(csv_path, mode='a', header=False, index=False)
+    for user_id, text_type in user_info_list:
+        try:
+            # Check DM event to retrieve meta info
+            dm2_response = client_dm.get_direct_message_events(participant_id=user_id)
+            dm2_count = str(dm2_response.meta['result_count'])
+        except Exception as e:
+            logging.error(f'Retrieving DM2 count for {user_id=}: ' + str(e))
+            dm2_count = "error"
+
+        # Determine the type of message to send based on text_type
+        if text_type == "non_dm2_text":
+            text = non_dm3_text
+            text_type = 'non_dm3_text'
+        elif text_type == "dm2_text":
+            text = dm3_text
+            text_type = 'dm3_text'
+        else:
+            continue  # If the text_type is not recognized, skip to the next iteration
+
+        # Send Direct Message
+        logging.info(f'Sending DM3 for {user_id=}')
+        dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
+        dm_timestamp = datetime.now()
+        timestamp = dm_timestamp.date()
+
+        # Store DM info
+        database.store_dm3(
+            user_id=user_id,
+            conversation_id=dm.data['dm_conversation_id'],
+            event_id=dm.data['dm_event_id'],
+            timestamp=timestamp,
+            text_type=text_type,
+            dm2_count=dm2_count
+        )
 
 
 def mute_compliance():
@@ -390,9 +349,7 @@ def mute_compliance():
 
 
 def main():
-    # Create an instance of your Flask app
     app = create_app()
-    # Push an application context
     with app.app_context():
         dm1()
         dm2()

@@ -316,7 +316,7 @@ def get_users_from_week():
     user_ids = [row[0] for row in cursor.fetchall()]
     cursor.close()
     # Return the list of user_ids
-    return jsonify(user_ids)
+    return user_ids
 
 
 def get_session_start(user_id):
@@ -331,3 +331,70 @@ def get_session_start(user_id):
     session_start = cursor.fetchone()[0] if cursor.rowcount != 0 else None
     cursor.close()
     return session_start
+
+
+def store_dm1(user_id, conversation_id, event_id, timestamp, text_type):
+    logging.info(f"Store DM1 for {user_id=}; {text_type=}")
+    sql_insert = """INSERT INTO dm1 (user_id, conversation_id, event_id, timestamp, text_type) VALUES(%s,%s,%s,%s,%s);"""
+    connection = getdb()
+    cursor = connection.cursor()
+    cursor.execute(sql_insert, (user_id, conversation_id, event_id, timestamp, text_type))
+    logging.info(f"DM1 status inserted successfully for {user_id=}")
+    cursor.close()
+    connection.commit()
+
+
+def store_dm2(user_id, conversation_id, event_id, timestamp, text_type, dm1_count):
+    logging.info(f"Store DM2 for {user_id=}; {text_type=}")
+    sql_insert = """INSERT INTO dm2 (user_id, conversation_id, event_id, timestamp, text_type, dm1_count) VALUES(%s,%s,%s,%s,%s,%s);"""
+    connection = getdb()
+    cursor = connection.cursor()
+    cursor.execute(sql_insert, (user_id, conversation_id, event_id, timestamp, text_type, dm1_count))
+    logging.info(f"DM2 status inserted successfully for {user_id=}")
+    cursor.close()
+    connection.commit()
+
+
+def store_dm3(user_id, conversation_id, event_id, timestamp, text_type, dm2_count):
+    logging.info(f"Store DM2 for {user_id=}; {text_type=}")
+    sql_insert = """INSERT INTO dm3 (user_id, conversation_id, event_id, timestamp, text_type, dm2_count) VALUES(%s,%s,%s,%s,%s,%s);"""
+    connection = getdb()
+    cursor = connection.cursor()
+    cursor.execute(sql_insert, (user_id, conversation_id, event_id, timestamp, text_type, dm2_count))
+    logging.info(f"DM2 status inserted successfully for {user_id=}")
+    cursor.close()
+    connection.commit()
+
+
+def get_dm1():
+    weekago_date = datetime.now() - timedelta(days=7)
+    weekago_str = weekago_date.strftime('%Y-%m-%d')  # Format as 'YYYY-MM-DD'
+    connection = getdb()
+    cursor = connection.cursor()
+    # Select user_ids where timestamp is from week ago
+    query = """
+        SELECT user_id, text_type
+        FROM dm1
+        WHERE DATE(timestamp) = %s;
+    """
+    cursor.execute(query, (weekago_str,))
+    user_info = [(row[0], row[1]) for row in cursor.fetchall()]  # List of tuples (user_id, text_type)
+    cursor.close()
+    return user_info
+
+
+def get_dm2():
+    weekago_date = datetime.now() - timedelta(days=7)
+    weekago_str = weekago_date.strftime('%Y-%m-%d')  # Format as 'YYYY-MM-DD'
+    connection = getdb()
+    cursor = connection.cursor()
+    # Select user_ids where timestamp is from week ago
+    query = """
+        SELECT user_id, text_type
+        FROM dm2
+        WHERE DATE(timestamp) = %s;
+    """
+    cursor.execute(query, (weekago_str,))
+    user_info = [(row[0], row[1]) for row in cursor.fetchall()]  # List of tuples (user_id, text_type)
+    cursor.close()
+    return user_info

@@ -70,3 +70,38 @@ CREATE TABLE headlines (
     c2 VARCHAR(255),
     c3 VARCHAR(255)
 ); 
+
+DROP TABLE IF EXISTS DM1;
+
+CREATE TABLE DM1 (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255),
+    conversation_id VARCHAR(255),
+    event_id VARCHAR(255),
+    timestamp TIMESTAMP,
+    text_type VARCHAR(255)
+);
+
+DROP TABLE IF EXISTS DM2;
+
+CREATE TABLE DM2 (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255),
+    conversation_id VARCHAR(255),
+    event_id VARCHAR(255),
+    timestamp TIMESTAMP,
+    text_type VARCHAR(255),
+    dm1_count VARCHAR(255)
+);
+
+DROP TABLE IF EXISTS DM3;
+
+CREATE TABLE DM3 (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255),
+    conversation_id VARCHAR(255),
+    event_id VARCHAR(255),
+    timestamp TIMESTAMP,
+    text_type VARCHAR(255),
+    dm2_count VARCHAR(255)
+);

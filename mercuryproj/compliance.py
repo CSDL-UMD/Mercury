@@ -284,9 +284,12 @@ def dm3():
 def mute_compliance():
     logging.info('Mute compliance initiated')
     # Retrieve mute state: compliance check only for "Done"
-    users = database.get_mute_state().json()
-    all_users_state = users.get("users_state", [])
+    users_dict = database.get_mute_state()
+    all_users_state = users_dict.get("users_state", [])
+
+    # Extract user_ids for users where state is "Done"
     user_ids = [user_info["user_id"] for user_info in all_users_state if user_info["state"] == "Done"]
+
     for user_id in user_ids:
         logging.info(f'Checking muting compliance for {user_id=}')
         response = database.get_access_token(user_id=user_id)
@@ -306,8 +309,8 @@ def mute_compliance():
             wait_on_rate_limit=True
         )
         muted_response = client.get_muted()
-        muted_list = [muted_response.data[i].id for i in range(muted_response.meta['result_count'])]
-        num_muted = muted_response.meta['result_count']
+        muted_list = [muted_response['data'][i].id for i in range(muted_response['meta']['result_count'])]
+        num_muted = muted_response['meta']['result_count']
         time_day = datetime.now().date()
         muted_dict = {
             "user_id": user_id,

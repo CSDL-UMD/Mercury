@@ -272,7 +272,7 @@ def get_mute_state():
     users_state = [{"user_id": item[0], "state": item[1]} for item in result]
     cursor.close()
     connection.commit()
-    return jsonify({"users_state": users_state})
+    return {"users_state": users_state}
 
 
 def store_mute_result(user_id, muted_list, num_muted, timestamp):

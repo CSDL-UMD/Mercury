@@ -17,12 +17,12 @@ def getdb():
             import sys
             sys.exit(1)
 
-        logging.info(f'Connecting to database {db_params["database"]} on {db_params["host"]}:{db_params["port"]}.')
+        logging.info(f'Connecting to database {db_params["dbname"]} on {db_params["host"]}:{db_params["port"]}.')
         conn = psycopg.connect(host=db_params["host"],
-                                port=db_params["port"],
-                                database=db_params["database"],
-                                user=db_params["user"],
-                                password=db_params["password"])
+                               port=db_params["port"],
+                               dbname=db_params["dbname"],
+                               user=db_params["user"],
+                               password=db_params["password"])
         g.db = conn
     return g.db
 

@@ -15,7 +15,7 @@ CREATE TABLE mercury_user (
     access_token VARCHAR(255),
     access_token_secret VARCHAR(255),
     session_start TIMESTAMP,
-    oauth_token VARCHAR(255,)
+    oauth_token VARCHAR(255),
     vsid VARCHAR(255)
 );
 

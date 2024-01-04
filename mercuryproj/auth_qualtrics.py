@@ -167,7 +167,6 @@ def auth_screenname():
         else:
             # Handle case where no data is found
             return "No data found for token", 404
-
     except Exception as e:
         # Log the exception and return an error message
         logging.error(f"Error retrieving user details: {e}")

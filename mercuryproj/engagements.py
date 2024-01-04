@@ -175,8 +175,12 @@ def collect_likes(user_id_list):
     logging.info(f"Collecting likes finished!")
 
 
-if __name__ == "__main__":
-    user_ids = ["..."]  # List of user_ids
+def main(user_ids):
     collect_tweets(user_ids, timing='pre')  # for post-treatment engagement, 'post'
     collect_tweets(user_ids, timing='post')
     collect_likes(user_ids)
+
+
+if __name__ == "__main__":
+    main(user_ids=[])
+

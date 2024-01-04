@@ -130,9 +130,8 @@ def get_user_details(oauth_token_qualtrics):
             "access_token_secret": result[3]
         }
     else:
-        logging.info(f"Getting user details for: {oauth_token_qualtrics=} failed")
+        logging.info(f"Waiting for user details of {oauth_token_qualtrics=}")
     cursor.close()
-    connection.close()
 
 
 def delete_auth_temp(oauth_token):

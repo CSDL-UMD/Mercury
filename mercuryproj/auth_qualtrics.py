@@ -305,25 +305,6 @@ def get_sampled_headlines():
     return resp_return
 
 
-@bp.route('/store_vsid', methods=['GET', 'POST'])
-def store_vsid():
-    """
-    In the end of the Wave 1 survey, this endpoint is called.
-    This function stores each participant's vsid in DB
-    by finding corresponding user_id.
-    """
-    user_id = request.args.get("user_id").strip()
-    vsid = request.args.get("vsid").strip()
-
-    # store in DB:
-    insert_vsid_payload = {
-        "user_id": user_id,
-        "vsid": vsid,
-    }
-    database.store_vsid(**insert_vsid_payload)
-    return "Stored vsid"
-
-
 @bp.route('/store_group', methods=['GET', 'POST'])
 def store_group():
     """

@@ -104,6 +104,10 @@ exit
 
 ## 12. Set up a SSH gateway locally.
 
+We need to set up passwordless login on the container (i.e. SSH key-based
+authentication). The following assumes you already have set up
+passwordless login to connect to the host (in this case nobbs.umd.edu), and that the key you are using is the default one (`id_rsa` in your local SSH configuration directory). It also assumes that you your user on the host is `ubuntu`, but it may differ.
+
 ```
 vim ~/.ssh/config
 ```
@@ -113,19 +117,39 @@ and add the following two blocks: first we tell SSH that nobbs will act as a gat
 ```
 Host nobbs
     HostName nobbs.umd.edu
+    User ubuntu
 
 Host nobbsgw
     HostName nobbs.umd.edu
     User ubuntu
 ```
 
-then we tell SSH to use the gateway when trying to connect to the container:
+(As mentioned above, here `User ubuntu` may need to be updated to
+whatever username you have on nobbs).
+
+Then we tell SSH to use the gateway when trying to connect to the
+container:
 
 ```
 Host mercury
     User ubuntu
     ProxyCommand ssh nobbsgw -W %h:%p
 ```
+
+(Here `User ubuntu` is what you want unless in steps 1-11 above you have
+configured a different user in the container.)
+
+Finally, you need to copy you SSH public key into the container:
+
+```
+ssh-copy-id mercury
+```
+
+This will prompt you for the password of the container's ubuntu user that
+you created in one of the steps above.
+
+(If using a different key you may need to supply option `-i` to
+`ssh-copy-id`.)
 
 You should be able now to ssh into the container from your laptop without password:
 

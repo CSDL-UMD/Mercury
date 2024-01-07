@@ -407,3 +407,27 @@ def get_dm2():
     user_info = [(row[0], row[1]) for row in cursor.fetchall()]  # List of tuples (user_id, text_type)
     cursor.close()
     return user_info
+
+
+def get_all_users():
+    connection = getdb()
+    cursor = connection.cursor()
+    cursor.execute("SELECT user_id FROM mercury_user")
+    user_ids = [row[0] for row in cursor.fetchall()]
+    cursor.close()
+    # Return the list of user_ids
+    return user_ids
+
+
+def store_eligibility(user_id, criteria, passed):
+    connection = getdb()
+    cursor = connection.cursor()
+    cursor.execute("""
+    INSERT INTO eligibility (user_id, criteria, passed) 
+    VALUES (%s, %s, %s) 
+    ON CONFLICT (user_id, criteria) 
+    DO UPDATE SET passed = EXCLUDED.passed;
+    """, (user_id, criteria, passed))
+    logging.info(f"Saved or updated eligibility check result: {user_id=}, {criteria=}, {passed=}")
+    cursor.close()
+    connection.commit()

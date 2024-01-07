@@ -64,14 +64,6 @@ CREATE TABLE mute_result (
     timestamp TIMESTAMP
 );
 
-DROP TABLE IF EXISTS headlines;
-
-CREATE TABLE headlines (
-    c1 VARCHAR(255),
-    c2 VARCHAR(255),
-    c3 VARCHAR(255)
-); 
-
 DROP TABLE IF EXISTS DM1;
 
 CREATE TABLE DM1 (
@@ -106,3 +98,15 @@ CREATE TABLE DM3 (
     text_type VARCHAR(255),
     dm2_count VARCHAR(255)
 );
+
+DROP TABLE IF EXISTS eligibility;
+
+CREATE TABLE eligibility (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255),
+    criteria VARCHAR(255),
+    passed BOOLEAN
+);
+
+ALTER TABLE eligibility
+ADD CONSTRAINT user_criteria_unique UNIQUE (user_id, criteria);

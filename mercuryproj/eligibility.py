@@ -141,7 +141,7 @@ def get_muted_criteria(user_ids):
             muted_dict = {"user_id": user_id, "already_muted": already_muted_list, "num_muted": num_muted}
 
             # Set the directory where the files will be saved
-            directory = os.path.join(data_dir, "eligibility")
+            directory = os.path.join(data_dir, "eligibility", "already_muted")
             if not os.path.exists(directory):
                 logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
                 os.mkdir(directory)

@@ -141,14 +141,15 @@ def get_muted_criteria(user_ids):
             muted_dict = {"user_id": user_id, "already_muted": already_muted_list, "num_muted": num_muted}
 
             # Set the directory where the files will be saved
-            directory = os.path.join(data_dir, "eligibility", "already_muted")
+            directory = os.path.join(data_dir, "eligibility")
             if not os.path.exists(directory):
                 logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
                 os.mkdir(directory)
 
-            # Save the result to a JSON file per user
-            with open(os.path.join(directory, f"already_muted_{user_id}.json"), 'w') as f:
-                json.dump(muted_dict, f, indent=4)
+            # Save the result to a JSON file per user if there are already muted low quality account
+            if num_muted > 0:
+                with open(os.path.join(directory, f"already_muted_{user_id}.json"), 'w') as f:
+                    json.dump(muted_dict, f, indent=4)
 
             # Decide pass_value based on num_muted
             pass_value = True if num_muted <= 94 else False

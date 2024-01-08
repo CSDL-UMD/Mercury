@@ -230,7 +230,7 @@ def store_randomized_group(user_id, randomized_group, session_start):
 
 
 def store_vsid(user_id, vsid):
-    logging.info(f"Randomized group update: {user_id=}, {vsid=}")
+    logging.info(f"Store vsid: {user_id=}, {vsid=}")
     connection = getdb()
     cursor = connection.cursor()
     cursor.execute("""UPDATE mercury_user SET vsid = %s WHERE user_id = %s;""", (vsid, user_id))

@@ -83,12 +83,10 @@ def auth_start():
         content = request_token.post(request_token_url, data={"oauth_callback": app_callback_url_qual})
         logging.info('Twitter access successful')
     except Exception as error:
-        print('Twitter access failed with error : ' + str(error))
         logging.error('Twitter access failed with error : ' + str(error))
 
     data_tokens = content.text.split("&")
 
-    print(data_tokens)
     oauth_token = data_tokens[0].split("=")[1]
     oauth_token_secret = data_tokens[1].split("=")[1]
 
@@ -105,7 +103,7 @@ def qualcallback():
     """
     Callback received from Twitter and stores long-term tokens in secure DB.
     """
-    print("Callback Called!!!")
+    logging.info("Callback Called!!!")
     oauth_token = request.args.get('oauth_token')
     oauth_verifier = request.args.get('oauth_verifier')
     oauth_denied = request.args.get('denied')
@@ -116,7 +114,7 @@ def qualcallback():
 
     # Retrieve oauth_token_secret from DB using oauth_token as the key
     oauth_token_secret = database.get_oauth_token_secret(oauth_token)
-    print(oauth_token_secret)
+
     oauth_access_tokens = OAuth1Session(client_key=cred['key'], client_secret=cred['key_secret'],
                                         resource_owner_key=oauth_token, resource_owner_secret=oauth_token_secret,
                                         verifier=oauth_verifier)
@@ -129,8 +127,6 @@ def qualcallback():
     real_oauth_token_secret = access_token[1].split("=")[1]
     user_id = access_token[2].split("=")[1]
     screen_name = access_token[3].split("=")[1]
-
-    print(real_oauth_token)
     timestamp = datetime.now().isoformat()
 
     insert_user_payload = {
@@ -150,6 +146,7 @@ def qualcallback():
 
 @bp.route('/auth_screenname', methods=['GET', 'POST'])
 def auth_screenname():
+    logging.info("Screen name is called!")
     oauth_token_qualtrics = request.args.get('oauth_token')
     # Find oauth_token from db
     try:
@@ -161,7 +158,7 @@ def auth_screenname():
             access_token_return = user_details['access_token']
             access_token_secret_return = user_details['access_token_secret']
 
-            print("Hello, ", screen_name_return)
+            logging.info(f"Hello, {screen_name_return=}")
             return f"{screen_name_return}$$$" + str(
                 userid_return) + "$$$" + access_token_return + "$$$" + access_token_secret_return
         else:
@@ -182,10 +179,9 @@ def following():
         user_id = request.args.get("user_id").strip()
     else:
         abort(500, "No user_id specified. Aborting.")
+    logging.info(f"Following the study account for {user_id=}")
     response = database.get_access_token(user_id)
     access_token_response = response.get_json()
-    print("access_token_response:")
-    print(access_token_response)
 
     if 'error' in access_token_response:
         raise Exception(access_token_response['error'])
@@ -209,9 +205,9 @@ def following():
         try:
             response = client.follow_user(target_user_id=target_follow_id, user_auth=True)
             success = response["data"]["following"]
-            print(success)
+            logging.info(f"Following result: {success=} for {user_id=}")
         except Exception as e:
-            print(f"Error: {e}")
+            logging.error(f"Error: {e}")
             time.sleep(1000)
         else:
             # If no exception was raised in the try block, break the loop
@@ -269,8 +265,7 @@ def get_sampled_headlines():
     """
     user_id = request.args.get("user_id").strip()
     wave = request.args.get("wave").strip()
-    print(user_id)
-    print(wave)
+    logging.info(f"Get sampled headlines for {user_id=} at {wave=}")
     # Load the data from the JSON file
     directory = f"{data_dir}/headlines_user"
     if not os.path.exists(directory):
@@ -299,9 +294,8 @@ def get_sampled_headlines():
         files_wave = [item['file'] for item in extracted_data if item['wave'] == 3]
         resp_return = f"{files_wave[0]}$$${files_wave[1]}$$${files_wave[2]}$$${files_wave[3]}$$${files_wave[4]}$$${files_wave[5]}$$${files_wave[6]}$$${files_wave[7]}$$${files_wave[8]}$$${files_wave[9]}$$${files_wave[10]}$$${files_wave[11]}"
     else:
-        print("Invalid wave value")
-    print(f"HERE'S {user_id}'S HEADLINES FOR THE WAVE {wave}:")
-    print(resp_return)
+        logging.info("Invalid wave value")
+    logging.info(f"{user_id=}'s headlines for {wave=}: {resp_return}")
     return resp_return
 
 

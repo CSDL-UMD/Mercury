@@ -47,7 +47,7 @@ def process_user_id(user_id):
     filepath = os.path.join(directory, f"data_{user_id}.json")
     # Check if user data already exists
     if os.path.exists(filepath):
-        print(f"User ID {user_id} data file already exists. Skipping processing.")
+        logging.info(f"User ID {user_id} data file already exists. Skipping processing.")
         return None
     # Load data from headline.json
     with open(str(files("mercuryproj.data").joinpath("headline.json")), mode='r') as f:
@@ -446,9 +446,9 @@ def follow_politifact():
         try:
             response = client.follow_user(target_user_id=target_follow_id, user_auth=True)
             success = response["data"]["following"]
-            print(success)
+            logging.info(f"Following result: {success=} for {user_id=}")
         except Exception as e:
-            print(f"Error: {e}")
+            logging.error(f"Error: {e}")
             time.sleep(1000)
         else:
             # If no exception was raised in the try block, break the loop

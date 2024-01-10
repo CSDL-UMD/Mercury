@@ -141,7 +141,11 @@ def qualcallback():
 
     # once done, delete the temporary tokens in DB
     database.delete_auth_temp(oauth_token)
-    return "<script>window.onload = window.close();</script>"
+    return '''
+    <div>
+        <p><strong>You may close this tab and go back to the survey.</strong></p>
+    </div>
+    '''
 
 
 @bp.route('/auth_screenname', methods=['GET', 'POST'])

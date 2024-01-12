@@ -103,62 +103,62 @@ def get_muted_criteria(user_ids):
     logging.info(f'Start getting muted criteria')
     for user_id in user_ids:
         logging.info(f'Getting muted accounts list for {user_id=}.')
+
+        # Get access token from DB via /get_access_token route
+        response = database.get_access_token(user_id)
+        access_token_response = response.get_json()
+
+        if 'error' in access_token_response:
+            logging.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
+            continue
+
+        # Store the user's tokens
+        access_token = access_token_response['access_token']
+        access_token_secret = access_token_response['access_token_secret']
+
+        # Make a tweepy client
+        client = tweepy.Client(
+            consumer_key=cred['key'],
+            consumer_secret=cred['key_secret'],
+            access_token=access_token,
+            access_token_secret=access_token_secret,
+            return_type=dict,
+            wait_on_rate_limit=True
+        )
+
+        # Attempt to retrieve the muted accounts
+        already_muted_list = []
         try:
-            # Get access token from DB via /get_access_token route
-            response = database.get_access_token(user_id)
-            access_token_response = response.get_json()
-
-            if 'error' in access_token_response:
-                logging.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
-                continue
-
-            # Store the user's tokens
-            access_token = access_token_response['access_token']
-            access_token_secret = access_token_response['access_token_secret']
-
-            # Make a tweepy client
-            client = tweepy.Client(
-                consumer_key=cred['key'],
-                consumer_secret=cred['key_secret'],
-                access_token=access_token,
-                access_token_secret=access_token_secret,
-                return_type=dict,
-                wait_on_rate_limit=True
-            )
-
-            # Attempt to retrieve the muted accounts
-            already_muted_list = []
-            try:
-                muted_response = client.get_muted()
-                if 'data' in muted_response and muted_response['meta']['result_count'] > 0:
-                    already_muted_list = [m['id'] for m in muted_response['data'] if m['id'] in target_user_ids]
-            except tweepy.TweepyException as e:
-                logging.error(f"An error occurred getting muted list for {user_id=}: {e}")
-            except Exception as e:
-                logging.error(f"An unexpected error occurred for {user_id=}: {e}")
-
-            num_muted = len(already_muted_list)
-            muted_dict = {"user_id": user_id, "already_muted": already_muted_list, "num_muted": num_muted}
-
-            # Set the directory where the files will be saved
-            directory = os.path.join(data_dir, "eligibility")
-            if not os.path.exists(directory):
-                logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-                os.mkdir(directory)
-
-            # Save the result to a JSON file per user if there are already muted low quality account
-            if num_muted > 0:
-                with open(os.path.join(directory, f"already_muted_{user_id}.json"), 'w') as f:
-                    json.dump(muted_dict, f, indent=4)
-
-            # Decide pass_value based on num_muted
-            pass_value = True if num_muted <= 94 else False
-            # Store eligibility check result:
-            database.store_eligibility(user_id, "already_muted", pass_value)
-            logging.info(f'Getting muted accounts list for {user_id=} done!')
-
+            muted_response = client.get_muted()
+            if 'data' in muted_response and muted_response['meta']['result_count'] > 0:
+                for account in muted_response['data']:
+                    account_id = int(account['id'])
+                    if account_id in target_user_ids:
+                        already_muted_list.append(account_id)
+        except tweepy.TweepyException as e:
+            logging.error(f"An error occurred getting muted list for {user_id=}: {e}")
         except Exception as e:
-            logging.error(f"An unexpected error occurred: {e}")
+            logging.error(f"An unexpected error occurred for {user_id=}: {e}")
+
+        num_muted = len(already_muted_list)
+        muted_dict = {"user_id": user_id, "already_muted": already_muted_list, "num_muted": num_muted}
+
+        # Set the directory where the files will be saved
+        directory = os.path.join(data_dir, "muting_job", "already_muted")
+        if not os.path.exists(directory):
+            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+            os.mkdir(directory)
+
+        # Save the result to a JSON file per user if there are already muted low quality account
+        if num_muted > 0:
+            with open(os.path.join(directory, f"already_muted_{user_id}.json"), 'w') as f:
+                json.dump(muted_dict, f, indent=4)
+
+        # Decide pass_value based on num_muted
+        pass_value = True if num_muted <= 94 else False
+        # Store eligibility check result:
+        database.store_eligibility(user_id, "already_muted", pass_value)
+        logging.info(f'Getting muted accounts list for {user_id=} done!')
     logging.info(f'End getting muted criteria')
 
 

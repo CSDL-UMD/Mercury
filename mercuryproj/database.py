@@ -302,7 +302,6 @@ def get_user_info(vsid):
     cursor = connection.cursor()
     cursor.execute("SELECT user_id FROM mercury_user WHERE vsid=%s;", (vsid,))
     result = cursor.fetchone()
-    print(result)
     if result:
         user_id = result[0]
         return user_id

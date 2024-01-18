@@ -270,6 +270,67 @@ def home_timeline_match(user_ids):
     logging.info(f'End searching for low-quality accounts in home timeline data')
 
 
+def unfollow_and_check(user_ids):
+    logging.info(f'Start checking whether user follows any accounts in the inventory')
+
+    chunk_size = 50  # considering rate limit (Pro)
+    chunks = [inventory.iloc[i:i + chunk_size] for i in range(0, len(inventory), chunk_size)]
+
+    # Dictionary to save changes
+    changes_dict = {}
+
+    for chunk_index, chunk in enumerate(chunks):
+        for user_id in user_ids:
+            response = database.get_access_token(user_id)
+            access_token_response = response.get_json()
+
+            if 'error' in access_token_response:
+                logging.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
+                continue
+
+            # Store the user's tokens
+            access_token = access_token_response['access_token']
+            access_token_secret = access_token_response['access_token_secret']
+
+            # initialize tweepy client
+            try:
+                client = tweepy.Client(
+                    consumer_key=cred['key'],
+                    consumer_secret=cred['key_secret'],
+                    access_token=access_token,
+                    access_token_secret=access_token_secret,
+                    return_type=dict,
+                    wait_on_rate_limit=True
+                )
+            except Exception as e:
+                logging.error(f'Problem w/ making tweepy client for {user_id=}: {e}')
+                continue
+
+            user_fields = 'created_at,public_metrics'
+            response = client.get_me(user_fields=user_fields)
+            following_count_before = response['data']['public_metrics']['following_count']
+
+            for target_user_id in chunk['target_user_id']:
+                client.unfollow_user(target_user_id=target_user_id)
+                response = client.get_me(user_fields=user_fields)
+                following_count_after = response['data']['public_metrics']['following_count']
+
+                if following_count_before != following_count_after:
+                    logging.warning(f"For {user_id=}: {following_count_before=} =/= {following_count_after=}")
+                    client.follow_user(target_user_id=target_user_id)
+                    database.store_eligibility(user_id, "following", True)
+                    # Store user_id - target_user_id in the dictionary
+                    changes_dict.setdefault(user_id, []).append(target_user_id)
+
+        directory = os.path.join(data_dir, "eligibility", "following")
+        os.makedirs(directory, exist_ok=True)
+        with open(os.path.join(directory, f"following_chunk_{chunk_index+1}.json"), 'w') as file:
+            json.dump(changes_dict, file, indent=4)
+        logging.info(f'Finished processing chunk {chunk_index + 1}')
+
+    logging.info(f'End checking whether user follows any accounts in the inventory')
+
+
 def main():
     app = create_app()
     with app.app_context():
@@ -278,6 +339,7 @@ def main():
         get_muted_criteria(user_ids)
         reverse_chron(user_ids)
         home_timeline_match(user_ids)
+        # unfollow_and_check(user_ids)
 
 
 if __name__ == "__main__":

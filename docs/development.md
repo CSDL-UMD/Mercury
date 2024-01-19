@@ -82,8 +82,8 @@ exit
 
 ### 3.1. Download PyCharm 
 
-You should download PyCharm Professional ((link)[https://www.jetbrains.com/pycharm/download/?section=mac]) 
-with your university email ending `.edu` ((sign-up/log-in link)[https://account.jetbrains.com/login)]). 
+You should download PyCharm Professional (https://www.jetbrains.com/pycharm/download/?section=mac) 
+with your university email ending `.edu` (https://account.jetbrains.com/login). 
 Your university email will let you use PyCharm Professional for free.
 
 

@@ -80,3 +80,34 @@ exit
 
 ## 3. Set up PyCharm on your laptop
 
+### 3.1. Download PyCharm 
+
+You should download PyCharm Professional ((link)[https://www.jetbrains.com/pycharm/download/?section=mac]) 
+with your university email ending `.edu` ((sign-up/log-in link)[https://account.jetbrains.com/login)]). 
+Your university email will let you use PyCharm Professional for free.
+
+
+Since you have to use the remote development feature provided by PyCharm, 
+you will need to download PyCharm Professional, not the Community Edition. 
+
+
+
+### 3.2. Add SSH projects using the remote development feature
+
+
+Open PyCharm IDE. You will see "Remote Development" menu on the left panel. 
+Under the "Remote Development" menu, there is `SSH` category. Click it. 
+
+
+You can now add `ubuntu@mercury-dev` by clicking `NEW PROJECT` button in the top right. 
+You will see "Connect to SSH" page. Click the gear icon next to the "<New Connection>" 
+to configure SSH. 
+
+Click the plus icon (+) to add the configuration, which should be like this: 
+- Host: `mercury-dev`
+- Port: 22
+- Username: ubuntu
+- Authentication type: OpenSSH config and authentication agent 
+  - Click 'Parse config file ~/.ssh/config'
+  - You could test by clicking `TEST CONNECTION` button. If something is wrong, you will get the error message. 
+

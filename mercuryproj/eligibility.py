@@ -23,9 +23,10 @@ from . import create_app
 from . import database
 from .configuration import configuration
 
+logging.basicConfig(level=logging.INFO)
+
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
-
 
 data_dir = user_data_dir(appname=__package__)
 if not os.path.exists(data_dir):

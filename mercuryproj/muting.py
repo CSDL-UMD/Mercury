@@ -12,6 +12,8 @@ import asyncio
 from . import database
 from .configuration import configuration
 
+logging.basicConfig(level=logging.INFO)
+
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
 
@@ -24,13 +26,14 @@ if not os.path.exists(data_dir):
 
 async def mute_users():
     # Getting newly updated users for muting
+    print("starting here!")
     users = database.get_mute_state()
     all_users_state = users.get("users_state", [])
     # Filter user_ids with state="New"
     new_users = [user_info["user_id"] for user_info in all_users_state if user_info["state"] == "New"]
     tasks = {}  # user_id: client, target_user_ids
     for user_id in new_users:
-        logging.info(f"Muting job for {user_id=} started!")
+        logging.warning(f"Muting job for {user_id=} started!")
         response = database.get_access_token(user_id)
         access_token_response = response.get_json()
 
@@ -72,6 +75,7 @@ async def mute_users():
                     'target_user_id': target_user_id,
                     'success_mute_status': success_mute_status
                 })
+                print("here - here!!")
             except Exception as e:
                 logging.error(f"Error: {e} for {user_id=} muting {target_user_id=}")
     for user_id in tasks:
@@ -107,7 +111,7 @@ async def mute_users():
         if response.json().get('message') == "Data inserted successfully":
             # Update state in store_mute_state
             database.store_mute_state(user_id=user_id, state="Done")
-            logging.info(f"Muting job for {user_id=} is done!")
+            logging.warning(f"Muting job for {user_id=} is done!")
 
 
 async def main():

@@ -11,12 +11,14 @@ import json
 import logging
 import os
 import tweepy
-from datetime import datetime, timedelta
+from datetime import timedelta
 from platformdirs import user_data_dir
 
 from . import create_app
 from . import database
 from .configuration import configuration
+
+logging.basicConfig(level=logging.INFO)
 
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']

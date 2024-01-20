@@ -18,6 +18,8 @@ import tweepy
 from csv import writer
 from datetime import datetime as dt
 from platformdirs import user_data_dir
+import requests
+from requests_oauthlib import OAuth1
 
 from . import create_app
 from . import database
@@ -271,65 +273,66 @@ def home_timeline_match(user_ids):
     logging.info(f'End searching for low-quality accounts in home timeline data')
 
 
-def unfollow_and_check(user_ids):
-    logging.info(f'Start checking whether user follows any accounts in the inventory')
+def relationship_check(user_ids):
+    logging.info(f'Start checking the relationships between users and inventory accounts')
 
-    chunk_size = 50  # considering rate limit (Pro)
-    chunks = [inventory.iloc[i:i + chunk_size] for i in range(0, len(inventory), chunk_size)]
+    target_user_list = list(map(str, target_user_ids))
 
-    # Dictionary to save changes
-    changes_dict = {}
+    # Considering endpoint limit: maximum 100, we chunk target_user_list
+    chunk_size = 100
+    chunks = [target_user_list[i:i + chunk_size] for i in range(0, len(target_user_list), chunk_size)]
 
-    for chunk_index, chunk in enumerate(chunks):
-        for user_id in user_ids:
-            response = database.get_access_token(user_id)
-            access_token_response = response.get_json()
+    for user_id in user_ids:
+        response = database.get_access_token(user_id)
+        access_token_response = response.get_json()
 
-            if 'error' in access_token_response:
-                logging.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
-                continue
+        if 'error' in access_token_response:
+            logging.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
+            continue
 
-            # Store the user's tokens
-            access_token = access_token_response['access_token']
-            access_token_secret = access_token_response['access_token_secret']
+        # Store the user's tokens
+        access_token = access_token_response['access_token']
+        access_token_secret = access_token_response['access_token_secret']
 
-            # initialize tweepy client
+        # initialize OAuth
+        auth = OAuth1(
+            client_key=cred['key'],
+            client_secret=cred['key_secret'],
+            resource_owner_key=access_token,
+            resource_owner_secret=access_token_secret
+        )
+        url = 'https://api.twitter.com/2/users'
+
+        # List to save the results
+        all_data = []
+
+        for index, chunk in enumerate(chunks[:4]):
+            params = {
+                'ids': ','.join(chunk),
+                'user.fields': 'connection_status'
+            }
+
             try:
-                client = tweepy.Client(
-                    consumer_key=cred['key'],
-                    consumer_secret=cred['key_secret'],
-                    access_token=access_token,
-                    access_token_secret=access_token_secret,
-                    return_type=dict,
-                    wait_on_rate_limit=True
-                )
-            except Exception as e:
-                logging.error(f'Problem w/ making tweepy client for {user_id=}: {e}')
+                response = requests.get(url, auth=auth, params=params)
+
+                if response.status_code == 200:
+                    users = response.json()
+                    all_data.extend(users['data'])
+                else:
+                    logging.error(f"Error with status code {response.status_code} for chunk {index}")
+                    continue
+
+            except requests.exceptions.RequestException as e:
+                logging.error(f"Request failed for chunk {index}: {e}")
                 continue
 
-            user_fields = 'created_at,public_metrics'
-            response = client.get_me(user_fields=user_fields)
-            following_count_before = response['data']['public_metrics']['following_count']
-
-            for target_user_id in chunk['target_user_id']:
-                client.unfollow_user(target_user_id=target_user_id)
-                response = client.get_me(user_fields=user_fields)
-                following_count_after = response['data']['public_metrics']['following_count']
-
-                if following_count_before != following_count_after:
-                    logging.warning(f"For {user_id=}: {following_count_before=} =/= {following_count_after=}")
-                    client.follow_user(target_user_id=target_user_id)
-                    database.store_eligibility(user_id, "following", True)
-                    # Store user_id - target_user_id in the dictionary
-                    changes_dict.setdefault(user_id, []).append(target_user_id)
-
-        directory = os.path.join(data_dir, "eligibility", "following")
+        directory = os.path.join(data_dir, "eligibility", "connection_status")
         os.makedirs(directory, exist_ok=True)
-        with open(os.path.join(directory, f"following_chunk_{chunk_index+1}.json"), 'w') as file:
-            json.dump(changes_dict, file, indent=4)
-        logging.info(f'Finished processing chunk {chunk_index + 1}')
+        with open(os.path.join(directory, f"Connection_status_{user_id}.json"), 'w', encoding='utf-8') as file:
+            json.dump(all_data, file, ensure_ascii=False, indent=4)
+        logging.info(f'Finished processing connection_status for {user_id=}')
 
-    logging.info(f'End checking whether user follows any accounts in the inventory')
+    logging.info(f'End checking relationships between users and inventory accounts')
 
 
 def main():
@@ -340,7 +343,7 @@ def main():
         get_muted_criteria(user_ids)
         reverse_chron(user_ids)
         home_timeline_match(user_ids)
-        # unfollow_and_check(user_ids)
+        relationship_check(user_ids)
 
 
 if __name__ == "__main__":

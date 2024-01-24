@@ -255,20 +255,20 @@ def home_timeline_match(user_ids):
 
         for item in data:
             author_id = item['author_id']
-            match_type = "direct" if str(author_id) in (str(target_user_id) for target_user_id in
-                                                        inventory['target_user_id']) else "none"
+            is_direct_match = str(author_id) in (str(target_user_id) for target_user_id in inventory['target_user_id'])
 
-            if match_type != "none":
-                hometimeline_match.append({"user_id": str(author_id), "match_type": match_type})
-
-            # Indirect matching for retweeted tweets
-            if "referenced_tweets" in item:
-                for ref_tweet in item['referenced_tweets']:
-                    if ref_tweet['type'] == "retweeted" and 'mentions' in item['entities']:
-                        for mention in item['entities']['mentions']:
-                            if str(mention['id']) in (str(target_user_id) for target_user_id in
-                                                      inventory['target_user_id']):
-                                hometimeline_match.append({"user_id": str(mention['id']), "match_type": "retweeted"})
+            if is_direct_match:
+                hometimeline_match.append({"user_id": str(author_id), "match_type": "direct"})
+            else:
+                # Indirect matching for retweeted tweets
+                if "referenced_tweets" in item:
+                    for ref_tweet in item['referenced_tweets']:
+                        if ref_tweet['type'] == "retweeted" and 'mentions' in item['entities']:
+                            for mention in item['entities']['mentions']:
+                                if str(mention['id']) in (str(target_user_id) for target_user_id in
+                                                          inventory['target_user_id']):
+                                    hometimeline_match.append(
+                                        {"user_id": str(mention['id']), "match_type": "retweeted"})
 
         pass_value = True if hometimeline_match else False
         database.store_eligibility(user_id, "hometimeline", pass_value)

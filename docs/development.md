@@ -82,8 +82,8 @@ exit
 
 ### 3.1. Download PyCharm 
 
-You should download PyCharm Professional ((link)[https://www.jetbrains.com/pycharm/download/?section=mac]) 
-with your university email ending `.edu` ((sign-up/log-in link)[https://account.jetbrains.com/login)]). 
+You should download PyCharm Professional (https://www.jetbrains.com/pycharm/download/?section=mac) 
+with your university email ending `.edu` (https://account.jetbrains.com/login). 
 Your university email will let you use PyCharm Professional for free.
 
 
@@ -100,7 +100,7 @@ Under the "Remote Development" menu, there is `SSH` category. Click it.
 
 
 You can now add `ubuntu@mercury-dev` by clicking `NEW PROJECT` button in the top right. 
-You will see "Connect to SSH" page. Click the gear icon next to the "<New Connection>" 
+You will see "Connect to SSH" page. Click the gear icon next to the "New Connection" 
 to configure SSH. 
 
 Click the plus icon (+) to add the configuration, which should be like this: 

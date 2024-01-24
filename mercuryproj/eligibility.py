@@ -249,16 +249,26 @@ def home_timeline_match(user_ids):
             os.mkdir(directory)
         with open(os.path.join(directory, f"reversechron-data-{user_id}.json"), 'r') as outfile:
             data = json.load(outfile)
-        author_ids = [item['author_id'] for item in data]
 
         # Initialize empty list for matching target_user_ids
         hometimeline_match = []
 
-        for target_user_id in inventory['target_user_id']:
-            # Convert target_user_id to string for comparison
-            str_target_user_id = str(target_user_id)
-            if str_target_user_id in (str(author_id) for author_id in author_ids):
-                hometimeline_match.append(str_target_user_id)
+        for item in data:
+            author_id = item['author_id']
+            match_type = "direct" if str(author_id) in (str(target_user_id) for target_user_id in
+                                                        inventory['target_user_id']) else "none"
+
+            if match_type != "none":
+                hometimeline_match.append({"user_id": str(author_id), "match_type": match_type})
+
+            # Indirect matching for retweeted tweets
+            if "referenced_tweets" in item:
+                for ref_tweet in item['referenced_tweets']:
+                    if ref_tweet['type'] == "retweeted" and 'mentions' in item['entities']:
+                        for mention in item['entities']['mentions']:
+                            if str(mention['id']) in (str(target_user_id) for target_user_id in
+                                                      inventory['target_user_id']):
+                                hometimeline_match.append({"user_id": str(mention['id']), "match_type": "retweeted"})
 
         pass_value = True if hometimeline_match else False
         database.store_eligibility(user_id, "hometimeline", pass_value)
@@ -277,7 +287,7 @@ def relationship_check(user_ids):
     logging.info(f'Start checking the relationships between users and inventory accounts')
 
     target_user_list = list(map(str, target_user_ids))
-
+    target_user_list.append('1691551574550519808')  # adding MercuryUMD to ensure that they are still following us
     # Considering endpoint limit: maximum 100, we chunk target_user_list
     chunk_size = 100
     chunks = [target_user_list[i:i + chunk_size] for i in range(0, len(target_user_list), chunk_size)]

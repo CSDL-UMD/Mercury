@@ -38,6 +38,7 @@ if not os.path.exists(data_dir):
 # Load inventory with target user ids
 inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")))
 target_user_ids = inventory["target_user_id"].tolist()
+target_usernames = inventory["twitter_handle"].tolist()
 
 
 def save_user_info(user_ids):
@@ -345,6 +346,57 @@ def relationship_check(user_ids):
     logging.info(f'End checking relationships between users and inventory accounts')
 
 
+def filter_active_inventory():
+    # Initialize OAuth
+    auth = OAuth1(
+        client_key=cred['key'],
+        client_secret=cred['key_secret'],
+        resource_owner_key=cred['access_token'],
+        resource_owner_secret=cred['access_token_secret']
+    )
+
+    # Ensure all target_user_ids are strings
+    target_usernames_list = list(map(str, target_usernames))
+
+    # Create chunks
+    chunk_size = 100
+    chunks = [target_usernames_list[i:i + chunk_size] for i in range(0, len(target_usernames_list), chunk_size)]
+
+    # List to save the results
+    active_accounts = []
+
+    # Process each chunk
+    for index, chunk in enumerate(chunks):
+        params = {'usernames': ','.join(chunk)}
+        try:
+            response = requests.get("https://api.twitter.com/2/users/by", auth=auth, params=params)
+            if response.status_code == 200:
+                data = response.json()
+                if 'data' in data:
+                    for account in data['data']:
+                        active_accounts.append(str(account['id']))
+            else:
+                logging.error(f"Error with status code {response.status_code} for chunk {index}")
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Request failed for chunk {index}: {e}")
+
+    # Filter the inventory DataFrame
+    inventory['target_user_id'] = inventory['target_user_id'].astype(str)
+    active_inventory = inventory[inventory['target_user_id'].isin(active_accounts)]
+
+    if active_inventory.empty:
+        logging.info("No active accounts found in the filtered inventory.")
+    else:
+        logging.info(f"Active accounts found: {len(active_inventory)}")
+
+    # Creating directory and saving the data
+    directory = os.path.join(data_dir, "active_accounts")
+    os.makedirs(directory, exist_ok=True)
+    active_inventory.to_json(os.path.join(directory, 'active_inventory.json'), orient='index')
+
+    logging.info("Filtered active accounts saved as JSON.")
+
+
 def main():
     app = create_app()
     with app.app_context():
@@ -354,6 +406,7 @@ def main():
         reverse_chron(user_ids)
         home_timeline_match(user_ids)
         relationship_check(user_ids)
+        filter_active_inventory()
 
 
 if __name__ == "__main__":

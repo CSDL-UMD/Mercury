@@ -239,6 +239,20 @@ def home_timeline_match(user_ids):
     """
     After reverse_chron job is done
     """
+
+    def extract_twitter_handle(url):
+        """
+        Extract handles from urls for quote
+        """
+        if 'status' in url:
+            parts = url.split('/')
+            try:
+                handle_index = parts.index('status') - 1
+                return parts[handle_index]
+            except ValueError:
+                return None
+        return None
+
     logging.info(f'Start searching for low-quality accounts in home timeline data')
 
     for user_id in user_ids:
@@ -270,6 +284,15 @@ def home_timeline_match(user_ids):
                                                           inventory['target_user_id']):
                                     hometimeline_match.append(
                                         {"user_id": str(mention['id']), "match_type": "retweeted"})
+
+                # Indirect matching for quoted tweets
+                if 'urls' in item.get('entities', {}):
+                    for url_info in item['entities']['urls']:
+                        expanded_url = url_info.get('expanded_url', '')
+                        twitter_handle = extract_twitter_handle(expanded_url)
+                        if twitter_handle in target_usernames:
+                            hometimeline_match.append(
+                                {"user_id": author_id, "match_type": "quoted"})
 
         pass_value = True if hometimeline_match else False
         database.store_eligibility(user_id, "hometimeline", pass_value)

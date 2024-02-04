@@ -1,0 +1,102 @@
+import time
+import heapq
+from typing import Tuple
+from .thtle import logger
+from collections import defaultdict
+import asyncio
+
+import json
+import os
+from tweepy.asynchronous import AsyncClient
+from datetime import datetime
+
+
+from . import database
+from .configuration  import configuration
+
+webInformation = configuration['webconfiguration']
+cred = configuration['twitterapp']
+
+# mute targets
+mute_targets = []
+
+# can we advoid poping and pushing when we know that it is not time yet to do this thing
+# for example the user has a lot users left and we know for a fact that it will not be out of the list for a while 
+
+class Throttler:
+    def __init__ (self):
+        self.pq = []
+        self.counter = 0
+        self.users_ids = []
+        self.usernames_tomute = defaultdict(list) 
+        # useer -> list to mute
+
+    def push(self, user:str, mute_list:list = mute_targets) -> None:
+        logger.debug("New user", extra={"id":user}) 
+        self.usernames_tomute[user] = mute_list.copy() # copy of list of users
+        self.users_ids.append((time.time(), user))
+        # the second we add them to the queue they are in progress
+
+    async def pop(self) -> None:
+        heapq.heapify(self.users_ids)
+        tasks = []
+
+        while self.users_ids[0][0] < time.time():
+            user_id = heapq.heappop(self.users_ids)[1]
+            if not self.usernames_tomute[user_id]:
+                continue
+                # change user to done
+            
+            target_user_id = self.usernames_tomute[user_id].pop()
+            new_task = asyncio.create_task(self.mute(user_id, target_user_id))
+            tasks.append(new_task)
+
+            #the muting happens here
+            # for each username successfully muted we just remove from the list
+            # make a task for each user that we get with an username and then run those tasks at the same time
+        asyncio.gather(*tasks)
+    
+    async def mute(self, user_id:str, target_user_id:str) -> None:
+        """
+            This function would mute one username for one user once at the time. It will also update the reset time and the useranme in case of failure
+        """
+
+        # try muting and get the return time
+        # what if muting failed? get the username back and put it in the list
+        logger.warning(f"User {user_id} is trying to mute {target_user_id}")
+        response = database.get_access_token(user_id)
+        access_token_response = response.get_json()
+
+        if 'error' in access_token_response:
+            logger.error("Authentification failed!")
+            raise Exception(access_token_response['error'])
+
+        # Store the user's tokens
+        access_token = access_token_response['access_token']
+        access_token_secret = access_token_response['access_token_secret']
+
+        client = AsyncClient(
+            consumer_key=cred['key'],
+            consumer_secret=cred['key_secret'],
+            access_token=access_token,
+            access_token_secret=access_token_secret,
+            return_type=dict,
+            wait_on_rate_limit=True, #what does this mean? does this mean everything goes through?
+            # hopefully it does not take more time to wait than just exiting and trying again next time
+        )
+
+        try:
+            response = await client.mute(target_user_id=target_user_id)
+            # how do we figure out if the mutting failed for rate limit reason
+            success_mute_status = response['data']['muting']
+            logger.debug("Muting results", extra={"user":user_id, "target":target_user_id, "status": success_mute_status})
+        except Exception as e:
+            logger.error("muting failed", extra={"error":e,"user":user_id, "target":target_user_id})
+        
+        # if "muting failed":
+        #     self.usernames_tomute[user[1]].append(username)
+
+        # assuming that we waited on rate limit we should be able to mute again right now
+        # reset_time = ... #returned from twitter
+        item  = (time.time(), user_id)
+        heapq.heappush(self.users_ids, item)

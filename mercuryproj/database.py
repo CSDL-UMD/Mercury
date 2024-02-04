@@ -418,15 +418,15 @@ def get_all_users():
     return user_ids
 
 
-def store_eligibility(user_id, criteria, passed):
+def store_eligibility(user_id, criteria, passed, num_count):
     connection = getdb()
     cursor = connection.cursor()
     cursor.execute("""
-    INSERT INTO eligibility (user_id, criteria, passed) 
-    VALUES (%s, %s, %s) 
+    INSERT INTO eligibility (user_id, criteria, passed, num_count) 
+    VALUES (%s, %s, %s, %s) 
     ON CONFLICT (user_id, criteria) 
     DO UPDATE SET passed = EXCLUDED.passed;
-    """, (user_id, criteria, passed))
-    logging.info(f"Saved or updated eligibility check result: {user_id=}, {criteria=}, {passed=}")
+    """, (user_id, criteria, passed, num_count))
+    logging.info(f"Saved or updated eligibility check result: {user_id=}, {criteria=}, {passed=}, {num_count=}")
     cursor.close()
     connection.commit()

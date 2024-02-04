@@ -68,8 +68,12 @@ def save_user_info(user_ids):
             logging.error(f'Problem w/ making tweepy client for {user_id=}: {e}')
             continue
 
-        user_fields = 'created_at,public_metrics'
-        response = client.get_me(user_fields=user_fields)
+        try:
+            user_fields = 'created_at,public_metrics'
+            response = client.get_me(user_fields=user_fields)
+        except Exception as e:
+            logging.error(f'Error in get_me() for {user_id}: {e}. Skipping to the next user.')
+            continue
 
         try:
             data = response['data']
@@ -85,10 +89,10 @@ def save_user_info(user_ids):
 
         if created_at_dt < min_date:
             logging.info(f"{user_id=}'s account created before Oct 1 2023")
-            database.store_eligibility(user_id, "account_created", True)
+            database.store_eligibility(user_id, "account_created", True, "na")
         else:
             logging.info(f"{user_id=}'s account created after Oct 1 2023")
-            database.store_eligibility(user_id, "account_created", False)
+            database.store_eligibility(user_id, "account_created", False, "na")
 
         row = [user_id, created_at_str, public_metrics]
         directory = os.path.join(data_dir, "eligibility")
@@ -161,7 +165,7 @@ def get_muted_criteria(user_ids):
         # Decide pass_value based on num_muted
         pass_value = True if num_muted <= 94 else False
         # Store eligibility check result:
-        database.store_eligibility(user_id, "already_muted", pass_value)
+        database.store_eligibility(user_id, "already_muted", pass_value, "na")
         logging.info(f'Getting muted accounts list for {user_id=} done!')
     logging.info(f'End getting muted criteria')
 
@@ -295,7 +299,7 @@ def home_timeline_match(user_ids):
                                 {"user_id": author_id, "match_type": "quoted"})
 
         pass_value = True if hometimeline_match else False
-        database.store_eligibility(user_id, "hometimeline", pass_value)
+        database.store_eligibility(user_id, "hometimeline", pass_value, "na")
 
         # Saving the hometimeline_match information for each user_id
         directory = os.path.join(data_dir, "eligibility", "hometimeline_match")
@@ -353,7 +357,7 @@ def relationship_check(user_ids):
                     users = response.json()
                     all_data.extend(users['data'])
                 else:
-                    logging.error(f"Error with status code {response.status_code} for chunk {index}")
+                    logging.error(f"{user_id=} error with status code {response.status_code} for chunk {index}")
                     continue
 
             except requests.exceptions.RequestException as e:
@@ -367,6 +371,33 @@ def relationship_check(user_ids):
         logging.info(f'Finished processing connection_status for {user_id=}')
 
     logging.info(f'End checking relationships between users and inventory accounts')
+
+
+def update_eligibility_from_json():
+    logging.info(f"Iterate connection_status to update eligibility results")
+    folder_path = os.path.join(data_dir, 'eligibility', 'connection_status')
+
+    for filename in os.listdir(folder_path):
+        if filename.startswith("Connection_status_") and filename.endswith(".json"):
+            user_id = filename.split('_')[-1].split('.')[0]
+            logging.info(f'Processing for {user_id=}')
+            file_path = os.path.join(folder_path, filename)
+
+            with open(file_path, 'r') as file:
+                data = json.load(file)
+
+                if not data:
+                    continue
+                # Check if the user follows MercuryUMD
+                if data[-1]['username'] == 'MercuryUMD' and 'following' in data[-1].get('connection_status', []):
+                    database.store_eligibility(user_id, "following_us", True, "na")
+
+                # Check if the user follows at least one of the low quality accounts
+                following_count = sum(1 for entry in data[:-1] if
+                                      'connection_status' in entry and 'following' in entry['connection_status'])
+                if following_count > 0:
+                    database.store_eligibility(user_id, "following_NG", True, following_count)
+            logging.info(f'Ended for {user_id=}')
 
 
 def filter_active_inventory():
@@ -429,6 +460,7 @@ def main():
         reverse_chron(user_ids)
         home_timeline_match(user_ids)
         relationship_check(user_ids)
+        update_eligibility_from_json()
         filter_active_inventory()
  
 

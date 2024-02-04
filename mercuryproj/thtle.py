@@ -1,16 +1,14 @@
 import atexit
+
 import json
+import logging
 import logging.config
 import logging.handlers
 import pathlib
-
-import time
-import heapq
-import asyncio
-import logging
 from queue import Queue
 
 logger = logging.getLogger(__name__)
+
 
 def setup_logging():
     log_queue = Queue()
@@ -25,9 +23,14 @@ def setup_logging():
 
     queue_listener = logging.handlers.QueueListener(log_queue, *logger.handlers)
 
-
     queue_listener.start()
     atexit.register(queue_listener.stop)
+
+
+setup_logging()
+logging.basicConfig(level="INFO")
+logging.debug("debug message")
+logging.warning("debug message")
 
 
 def main():

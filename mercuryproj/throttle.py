@@ -5,9 +5,19 @@ from .thtle import logger
 from collections import defaultdict
 import asyncio
 
-from . import database
+import json
+import os
+from tweepy.asynchronous import AsyncClient
+from datetime import datetime
 
-mute_list = []
+
+from . import database
+from .configuration  import configuration
+
+webInformation = configuration['webconfiguration']
+cred = configuration['twitterapp']
+
+mute_targets = []
 
 # can we advoid poping and pushing when we know that it is not time yet to do this thing
 # for example the user has a lot users left and we know for a fact that it will not be out of the list for a while 
@@ -19,7 +29,7 @@ class Throttler:
         self.users_ids = []
         self.usernames_tomute = defaultdict(list) 
 
-    def push(self, user:str, mute_list:list = mute_list) -> None:
+    def push(self, user:str, mute_list:list = mute_targets) -> None:
         logger.debug("New user", extra={"id":user}) 
         self.usernames_tomute[user] = mute_list.copy() # copy of list of users
         self.users_ids.append((time.time(), user))
@@ -31,13 +41,13 @@ class Throttler:
         while self.users_ids[0][0] < time.time():
             user = heapq.heappop(self.users_ids)
             username = self.usernames_tomute[user[1]].pop()
-            new_task = self.mute(user, username)
+            new_task = asyncio.create_task(self.mute(user, username))
             tasks.append(new_task)
 
             #the muting happens here
             # for each username successfully muted we just remove from the list
             # make a task for each user that we get with an username and then run those tasks at the same time
-        asyncio.gather(tasks)
+        asyncio.gather(*tasks)
     
     async def mute(self, user:Tuple, username:str) -> None:
         """
@@ -59,7 +69,6 @@ class Throttler:
         access_token_secret = access_token_response['access_token_secret']
 
         client = AsyncClient(
-
             consumer_key=cred['key'],
             consumer_secret=cred['key_secret'],
             access_token=access_token,
@@ -69,7 +78,7 @@ class Throttler:
         )
 
         try:
-            response = await  client.mute(target_user_id=target_user_id)
+            response = await client.mute(target_user_id=target_user_id)
             success_mute_status = response['data']['muting']
             logger.debug("Muting results", extra={"user":user, "target":target_user_id})
 

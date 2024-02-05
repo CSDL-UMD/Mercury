@@ -8,11 +8,13 @@ During treatment period:
 Automation from 6 days after the start of Wave 2:
 - dm1(), dm2(), dm3()
 """
-
+import csv
 import json
 import logging
 import os
 import tweepy
+import requests
+from requests_oauthlib import OAuth1
 from datetime import datetime
 from platformdirs import user_data_dir
 from . import create_app
@@ -283,8 +285,12 @@ def dm3():
         )
 
 
-def mute_compliance():
-    logging.info('Mute compliance initiated')
+def muting_relationship_check():
+    """
+    This function checks muting relationship between user_id and target_user_id in that user's muted_list.
+    This function returns and saves the dyad relationships between user_id and target_user_ids.
+    Combined with mute_compliance() function, the purpose is to check whether user is keep muting the target_user_id.
+    """
     # Retrieve mute state: compliance check only for "Done"
     users_dict = database.get_mute_state()
     all_users_state = users_dict.get("users_state", [])
@@ -293,64 +299,116 @@ def mute_compliance():
     user_ids = [user_info["user_id"] for user_info in all_users_state if user_info["state"] == "Done"]
 
     for user_id in user_ids:
-        logging.info(f'Checking muting compliance for {user_id=}')
-        response = database.get_access_token(user_id=user_id)
-        access_token_response = response.json()
+        logging.info(f'Checking muting relationship for {user_id=}')
+        response = database.get_access_token(user_id)
+        access_token_response = response.get_json()
+
         if 'error' in access_token_response:
             raise Exception(access_token_response['error'])
-        # Store the user's tokens
+
         access_token = access_token_response['access_token']
         access_token_secret = access_token_response['access_token_secret']
-        # Make a tweepy client
-        client = tweepy.Client(
-            consumer_key=cred['key'],
-            consumer_secret=cred['key_secret'],
-            access_token=access_token,
-            access_token_secret=access_token_secret,
-            return_type=dict,
-            wait_on_rate_limit=True
+
+        # initialize OAuth
+        auth = OAuth1(
+            client_key=cred['key'],
+            client_secret=cred['key_secret'],
+            resource_owner_key=access_token,
+            resource_owner_secret=access_token_secret
         )
-        muted_response = client.get_muted()
-        muted_list = [muted_response['data'][i].id for i in range(muted_response['meta']['result_count'])]
-        num_muted = muted_response['meta']['result_count']
-        time_day = datetime.now().date()
-        muted_dict = {
-            "user_id": user_id,
-            "muted_list": json.dumps(muted_list),
-            "num_muted": num_muted,
-            "timestamp": time_day
-        }
-        # Bring the most recent compliance file
-        directory = f"{data_dir}/muting_job/compliance"
+        url = 'https://api.twitter.com/2/users'
+
+        # Get muted_accounts_for_{user_id}
+        # Load JSON data
+        directory = os.path.join(data_dir, "muting_job", "muted_accounts")
         if not os.path.exists(directory):
             logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
             os.mkdir(directory)
-        file_list = [f for f in os.listdir(directory) if f.startswith(f"file_{user_id}_")]
-        if file_list:
-            max_time_day_file = max(file_list, key=lambda x: x.rsplit('_', 1)[-1])
-            file_path = os.path.join(directory, max_time_day_file)
-            with open(file_path, 'r') as f:
-                saved_data = json.load(f)
-            # To compare:
-            saved_data_str = json.dumps(saved_data, sort_keys=True)
-            muted_dict_str = json.dumps(muted_dict, sort_keys=True)
-            if saved_data_str == muted_dict_str:
-                logging.info(f"Mute compliance check for {user_id=}: pass!")
-            else:
-                compliance = False
-                muted_dict = {
-                    "user_id": user_id,
-                    "muted_list": json.dumps(muted_list),
-                    "num_muted": num_muted,
-                    "timestamp": time_day,
-                    "compliance": compliance
-                }
-                # Save:
-                file_path = f"{directory}/file_{user_id}_{time_day}.json"
-                with open(file_path, 'w') as f:
-                    f.write(json.dumps(muted_dict, indent=4))
-        else:
-            logging.info(f'No files found for {user_id=}')
+        with open(os.path.join(directory, f"muted_accounts_for_{user_id}.json"), 'r') as outfile:
+            data = json.load(outfile)
+
+        target_user_list = [entry["target_user_id"] for entry in data]
+        # Considering endpoint limit: maximum 100, we chunk target_user_list
+        chunk_size = 100
+        chunks = [target_user_list[i:i + chunk_size] for i in range(0, len(target_user_list), chunk_size)]
+
+        # List to save the results
+        all_data = []
+
+        for index, chunk in enumerate(chunks):
+            params = {
+                'ids': ','.join(str(id) for id in chunk),
+                'user.fields': 'connection_status'
+            }
+
+            try:
+                response = requests.get(url, auth=auth, params=params)
+
+                if response.status_code == 200:
+                    users = response.json()
+                    all_data.extend(users['data'])
+                else:
+                    logging.error(f"{user_id=} error with status code {response.status_code} for chunk {index}")
+                    continue
+
+            except requests.exceptions.RequestException as e:
+                logging.error(f"Request failed for chunk {index}: {e}")
+                continue
+
+        directory = os.path.join(data_dir, "muting_job", "compliance")
+        os.makedirs(directory, exist_ok=True)
+        time_day = str(datetime.now().date())
+        with open(os.path.join(directory, f"{user_id}_{time_day}.json"), 'w', encoding='utf-8') as file:
+            json.dump(all_data, file, ensure_ascii=False, indent=4)
+        logging.info(f'Finished processing connection_status for {user_id=}')
+
+    logging.info(f'End checking relationships between users and inventory accounts')
+
+
+def mute_compliance():
+    logging.info('Mute compliance initiated')
+    # Retrieve compliance files
+    directory = f"{data_dir}/muting_job/compliance"
+    if not os.path.exists(directory):
+        logging.warning(f"Directory {directory} does not exist.")
+        return
+
+    # Extract unique user IDs and their latest file
+    files = os.listdir(directory)
+    user_files = {}
+    for file_name in files:
+        if file_name.endswith('.json'):
+            user_id, date_str = file_name.rsplit('_', 1)[0], file_name.rsplit('_', 1)[-1].replace('.json', '')
+            date = datetime.strptime(date_str, '%Y-%m-%d')
+            if user_id not in user_files or date > user_files[user_id][1]:
+                user_files[user_id] = (file_name, date)
+
+    # Process the most recent file for each user ID
+    for user_id, (file_name, _) in user_files.items():
+        file_path = os.path.join(directory, file_name)
+        with open(file_path, 'r', encoding='utf-8') as file:
+            all_data = json.load(file)
+
+        # Apply the filtering and extracting logic here
+        filtered_data = [user for user in all_data if
+                         "connection_status" not in user or "muting" not in user["connection_status"]]
+        # Append to a CSV file
+        csv_file_path = os.path.join(directory, "compliance_report.csv")
+        with open(csv_file_path, 'a', newline='', encoding='utf-8') as csvfile:
+            fieldnames = ['file_user_id', 'target_user_id', 'target_username', 'time_day']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            if os.stat(csv_file_path).st_size == 0:  # If file is empty, write header
+                writer.writeheader()
+
+            time_day = str(datetime.now().date())
+            for user in filtered_data:
+                writer.writerow({
+                    'file_user_id': user_id,
+                    'target_user_id': user.get('id'),
+                    'target_username': user.get('username'),
+                    'time_day': time_day
+                })
+    logging.info(f'End mute compliance')
 
 
 def main():
@@ -359,6 +417,7 @@ def main():
         dm1()
         dm2()
         dm3()
+        muting_relationship_check()
         mute_compliance()
 
 

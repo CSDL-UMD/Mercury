@@ -2,7 +2,7 @@
 * Eligibility check *
 Based on the Wave 1 survey result, prepare a list of user_id.
 (1) `save_user_info()`: check user information
-- (a) whether the user account is not too new: True if user account created before Oct 1st 2023, else False
+- (a) whether the user account is not too new: True if user account created before Oct 23rd 2023, else False
 - (b) store the number of accounts that the user is following
     - save as `user_info.csv` with user_id, account created date, and other public metrics
 (2) 'get_muted_criteria()': True if not have already muted more than 30% of accounts in the inventory
@@ -83,15 +83,15 @@ def save_user_info(user_ids):
 
         created_at_str = data['created_at'].replace("Z", "UTC")
         created_at_dt = dt.strptime(created_at_str, "%Y-%m-%dT%H:%M:%S.%f%Z")
-        min_date = dt(2023, 10, 1)
+        min_date = dt(2023, 10, 24)
 
         public_metrics = data['public_metrics']
 
         if created_at_dt < min_date:
-            logging.info(f"{user_id=}'s account created before Oct 1 2023")
+            logging.info(f"{user_id=}'s account created before Oct 24 2023")
             database.store_eligibility(user_id, "account_created", True, "na")
         else:
-            logging.info(f"{user_id=}'s account created after Oct 1 2023")
+            logging.info(f"{user_id=}'s account created after Oct 23 2023")
             database.store_eligibility(user_id, "account_created", False, "na")
 
         row = [user_id, created_at_str, public_metrics]

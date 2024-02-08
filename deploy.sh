@@ -17,6 +17,7 @@ CONF=${1}
 SYSTEMDCONF=mercuryproj/samples/mercuryproj.service
 
 sshrun() {
+    # shellcheck disable=SC2029
     ssh "${USER}@${HOST}" "${@}"
 }
 

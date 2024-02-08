@@ -2,7 +2,7 @@
 * Eligibility check *
 Based on the Wave 1 survey result, prepare a list of user_id.
 (1) `save_user_info()`: check user information
-- (a) whether the user account is not too new: True if user account created before Oct 1st 2023, else False
+- (a) whether the user account is not too new: True if user account created before Oct 23rd 2023, else False
 - (b) store the number of accounts that the user is following
     - save as `user_info.csv` with user_id, account created date, and other public metrics
 (2) 'get_muted_criteria()': True if not have already muted more than 30% of accounts in the inventory
@@ -18,14 +18,17 @@ import tweepy
 from csv import writer
 from datetime import datetime as dt
 from platformdirs import user_data_dir
+import requests
+from requests_oauthlib import OAuth1
 
 from . import create_app
 from . import database
 from .configuration import configuration
 
+logging.basicConfig(level=logging.INFO)
+
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
-
 
 data_dir = user_data_dir(appname=__package__)
 if not os.path.exists(data_dir):
@@ -35,6 +38,7 @@ if not os.path.exists(data_dir):
 # Load inventory with target user ids
 inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")))
 target_user_ids = inventory["target_user_id"].tolist()
+target_usernames = inventory["twitter_handle"].tolist()
 
 
 def save_user_info(user_ids):
@@ -64,8 +68,12 @@ def save_user_info(user_ids):
             logging.error(f'Problem w/ making tweepy client for {user_id=}: {e}')
             continue
 
-        user_fields = 'created_at,public_metrics'
-        response = client.get_me(user_fields=user_fields)
+        try:
+            user_fields = 'created_at,public_metrics'
+            response = client.get_me(user_fields=user_fields)
+        except Exception as e:
+            logging.error(f'Error in get_me() for {user_id}: {e}. Skipping to the next user.')
+            continue
 
         try:
             data = response['data']
@@ -75,16 +83,16 @@ def save_user_info(user_ids):
 
         created_at_str = data['created_at'].replace("Z", "UTC")
         created_at_dt = dt.strptime(created_at_str, "%Y-%m-%dT%H:%M:%S.%f%Z")
-        min_date = dt(2023, 10, 1)
+        min_date = dt(2023, 10, 24)
 
         public_metrics = data['public_metrics']
 
         if created_at_dt < min_date:
-            logging.info(f"{user_id=}'s account created before Oct 1 2023")
-            database.store_eligibility(user_id, "account_created", True)
+            logging.info(f"{user_id=}'s account created before Oct 24 2023")
+            database.store_eligibility(user_id, "account_created", True, "na")
         else:
-            logging.info(f"{user_id=}'s account created after Oct 1 2023")
-            database.store_eligibility(user_id, "account_created", False)
+            logging.info(f"{user_id=}'s account created after Oct 23 2023")
+            database.store_eligibility(user_id, "account_created", False, "na")
 
         row = [user_id, created_at_str, public_metrics]
         directory = os.path.join(data_dir, "eligibility")
@@ -157,7 +165,7 @@ def get_muted_criteria(user_ids):
         # Decide pass_value based on num_muted
         pass_value = True if num_muted <= 94 else False
         # Store eligibility check result:
-        database.store_eligibility(user_id, "already_muted", pass_value)
+        database.store_eligibility(user_id, "already_muted", pass_value, "na")
         logging.info(f'Getting muted accounts list for {user_id=} done!')
     logging.info(f'End getting muted criteria')
 
@@ -235,6 +243,20 @@ def home_timeline_match(user_ids):
     """
     After reverse_chron job is done
     """
+
+    def extract_twitter_handle(url):
+        """
+        Extract handles from urls for quote
+        """
+        if 'status' in url:
+            parts = url.split('/')
+            try:
+                handle_index = parts.index('status') - 1
+                return parts[handle_index]
+            except ValueError:
+                return None
+        return None
+
     logging.info(f'Start searching for low-quality accounts in home timeline data')
 
     for user_id in user_ids:
@@ -246,19 +268,38 @@ def home_timeline_match(user_ids):
             os.mkdir(directory)
         with open(os.path.join(directory, f"reversechron-data-{user_id}.json"), 'r') as outfile:
             data = json.load(outfile)
-        author_ids = [item['author_id'] for item in data]
 
         # Initialize empty list for matching target_user_ids
         hometimeline_match = []
 
-        for target_user_id in inventory['target_user_id']:
-            # Convert target_user_id to string for comparison
-            str_target_user_id = str(target_user_id)
-            if str_target_user_id in (str(author_id) for author_id in author_ids):
-                hometimeline_match.append(str_target_user_id)
+        for item in data:
+            author_id = item['author_id']
+            is_direct_match = str(author_id) in (str(target_user_id) for target_user_id in inventory['target_user_id'])
+
+            if is_direct_match:
+                hometimeline_match.append({"user_id": str(author_id), "match_type": "direct"})
+            else:
+                # Indirect matching for retweeted tweets
+                if "referenced_tweets" in item:
+                    for ref_tweet in item['referenced_tweets']:
+                        if ref_tweet['type'] == "retweeted" and 'mentions' in item['entities']:
+                            for mention in item['entities']['mentions']:
+                                if str(mention['id']) in (str(target_user_id) for target_user_id in
+                                                          inventory['target_user_id']):
+                                    hometimeline_match.append(
+                                        {"user_id": str(mention['id']), "match_type": "retweeted"})
+
+                # Indirect matching for quoted tweets
+                if 'urls' in item.get('entities', {}):
+                    for url_info in item['entities']['urls']:
+                        expanded_url = url_info.get('expanded_url', '')
+                        twitter_handle = extract_twitter_handle(expanded_url)
+                        if twitter_handle in target_usernames:
+                            hometimeline_match.append(
+                                {"user_id": author_id, "match_type": "quoted"})
 
         pass_value = True if hometimeline_match else False
-        database.store_eligibility(user_id, "hometimeline", pass_value)
+        database.store_eligibility(user_id, "hometimeline", pass_value, "na")
 
         # Saving the hometimeline_match information for each user_id
         directory = os.path.join(data_dir, "eligibility", "hometimeline_match")
@@ -270,65 +311,144 @@ def home_timeline_match(user_ids):
     logging.info(f'End searching for low-quality accounts in home timeline data')
 
 
-def unfollow_and_check(user_ids):
-    logging.info(f'Start checking whether user follows any accounts in the inventory')
+def relationship_check(user_ids):
+    logging.info(f'Start checking the relationships between users and inventory accounts')
 
-    chunk_size = 50  # considering rate limit (Pro)
-    chunks = [inventory.iloc[i:i + chunk_size] for i in range(0, len(inventory), chunk_size)]
+    target_user_list = list(map(str, target_user_ids))
+    target_user_list.append('1691551574550519808')  # adding MercuryUMD to ensure that they are still following us
+    # Considering endpoint limit: maximum 100, we chunk target_user_list
+    chunk_size = 100
+    chunks = [target_user_list[i:i + chunk_size] for i in range(0, len(target_user_list), chunk_size)]
 
-    # Dictionary to save changes
-    changes_dict = {}
+    for user_id in user_ids:
+        response = database.get_access_token(user_id)
+        access_token_response = response.get_json()
 
-    for chunk_index, chunk in enumerate(chunks):
-        for user_id in user_ids:
-            response = database.get_access_token(user_id)
-            access_token_response = response.get_json()
+        if 'error' in access_token_response:
+            logging.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
+            continue
 
-            if 'error' in access_token_response:
-                logging.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
-                continue
+        # Store the user's tokens
+        access_token = access_token_response['access_token']
+        access_token_secret = access_token_response['access_token_secret']
 
-            # Store the user's tokens
-            access_token = access_token_response['access_token']
-            access_token_secret = access_token_response['access_token_secret']
+        # initialize OAuth
+        auth = OAuth1(
+            client_key=cred['key'],
+            client_secret=cred['key_secret'],
+            resource_owner_key=access_token,
+            resource_owner_secret=access_token_secret
+        )
+        url = 'https://api.twitter.com/2/users'
 
-            # initialize tweepy client
+        # List to save the results
+        all_data = []
+
+        for index, chunk in enumerate(chunks[:4]):
+            params = {
+                'ids': ','.join(chunk),
+                'user.fields': 'connection_status'
+            }
+
             try:
-                client = tweepy.Client(
-                    consumer_key=cred['key'],
-                    consumer_secret=cred['key_secret'],
-                    access_token=access_token,
-                    access_token_secret=access_token_secret,
-                    return_type=dict,
-                    wait_on_rate_limit=True
-                )
-            except Exception as e:
-                logging.error(f'Problem w/ making tweepy client for {user_id=}: {e}')
+                response = requests.get(url, auth=auth, params=params)
+
+                if response.status_code == 200:
+                    users = response.json()
+                    all_data.extend(users['data'])
+                else:
+                    logging.error(f"{user_id=} error with status code {response.status_code} for chunk {index}")
+                    continue
+
+            except requests.exceptions.RequestException as e:
+                logging.error(f"Request failed for chunk {index}: {e}")
                 continue
 
-            user_fields = 'created_at,public_metrics'
-            response = client.get_me(user_fields=user_fields)
-            following_count_before = response['data']['public_metrics']['following_count']
-
-            for target_user_id in chunk['target_user_id']:
-                client.unfollow_user(target_user_id=target_user_id)
-                response = client.get_me(user_fields=user_fields)
-                following_count_after = response['data']['public_metrics']['following_count']
-
-                if following_count_before != following_count_after:
-                    logging.warning(f"For {user_id=}: {following_count_before=} =/= {following_count_after=}")
-                    client.follow_user(target_user_id=target_user_id)
-                    database.store_eligibility(user_id, "following", True)
-                    # Store user_id - target_user_id in the dictionary
-                    changes_dict.setdefault(user_id, []).append(target_user_id)
-
-        directory = os.path.join(data_dir, "eligibility", "following")
+        directory = os.path.join(data_dir, "eligibility", "connection_status")
         os.makedirs(directory, exist_ok=True)
-        with open(os.path.join(directory, f"following_chunk_{chunk_index+1}.json"), 'w') as file:
-            json.dump(changes_dict, file, indent=4)
-        logging.info(f'Finished processing chunk {chunk_index + 1}')
+        with open(os.path.join(directory, f"Connection_status_{user_id}.json"), 'w', encoding='utf-8') as file:
+            json.dump(all_data, file, ensure_ascii=False, indent=4)
+        logging.info(f'Finished processing connection_status for {user_id=}')
 
-    logging.info(f'End checking whether user follows any accounts in the inventory')
+    logging.info(f'End checking relationships between users and inventory accounts')
+
+
+def update_eligibility_from_json():
+    logging.info(f"Iterate connection_status to update eligibility results")
+    folder_path = os.path.join(data_dir, 'eligibility', 'connection_status')
+
+    for filename in os.listdir(folder_path):
+        if filename.startswith("Connection_status_") and filename.endswith(".json"):
+            user_id = filename.split('_')[-1].split('.')[0]
+            logging.info(f'Processing for {user_id=}')
+            file_path = os.path.join(folder_path, filename)
+
+            with open(file_path, 'r') as file:
+                data = json.load(file)
+
+                if not data:
+                    continue
+                # Check if the user follows MercuryUMD
+                if data[-1]['username'] == 'MercuryUMD' and 'following' in data[-1].get('connection_status', []):
+                    database.store_eligibility(user_id, "following_us", True, "na")
+
+                # Check if the user follows at least one of the low quality accounts
+                following_count = sum(1 for entry in data[:-1] if
+                                      'connection_status' in entry and 'following' in entry['connection_status'])
+                if following_count > 0:
+                    database.store_eligibility(user_id, "following_NG", True, following_count)
+            logging.info(f'Ended for {user_id=}')
+
+
+def filter_active_inventory():
+    # Initialize OAuth
+    auth = OAuth1(
+        client_key=cred['key'],
+        client_secret=cred['key_secret'],
+        resource_owner_key=cred['access_token'],
+        resource_owner_secret=cred['access_token_secret']
+    )
+
+    # Ensure all target_user_ids are strings
+    target_usernames_list = list(map(str, target_usernames))
+
+    # Create chunks
+    chunk_size = 100
+    chunks = [target_usernames_list[i:i + chunk_size] for i in range(0, len(target_usernames_list), chunk_size)]
+
+    # List to save the results
+    active_accounts = []
+
+    # Process each chunk
+    for index, chunk in enumerate(chunks):
+        params = {'usernames': ','.join(chunk)}
+        try:
+            response = requests.get("https://api.twitter.com/2/users/by", auth=auth, params=params)
+            if response.status_code == 200:
+                data = response.json()
+                if 'data' in data:
+                    for account in data['data']:
+                        active_accounts.append(str(account['id']))
+            else:
+                logging.error(f"Error with status code {response.status_code} for chunk {index}")
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Request failed for chunk {index}: {e}")
+
+    # Filter the inventory DataFrame
+    inventory['target_user_id'] = inventory['target_user_id'].astype(str)
+    active_inventory = inventory[inventory['target_user_id'].isin(active_accounts)]
+
+    if active_inventory.empty:
+        logging.info("No active accounts found in the filtered inventory.")
+    else:
+        logging.info(f"Active accounts found: {len(active_inventory)}")
+
+    # Creating directory and saving the data
+    directory = os.path.join(data_dir, "active_accounts")
+    os.makedirs(directory, exist_ok=True)
+    active_inventory.to_json(os.path.join(directory, 'active_inventory.json'), orient='index')
+
+    logging.info("Filtered active accounts saved as JSON.")
 
 
 def main():
@@ -339,8 +459,10 @@ def main():
         get_muted_criteria(user_ids)
         reverse_chron(user_ids)
         home_timeline_match(user_ids)
-        # unfollow_and_check(user_ids)
-
+        relationship_check(user_ids)
+        update_eligibility_from_json()
+        filter_active_inventory()
+ 
 
 if __name__ == "__main__":
     main()

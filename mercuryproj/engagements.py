@@ -6,17 +6,18 @@ This module collects engagements of participants.
 - Likes: 300 tweets per account
 """
 import time
-
 import json
 import logging
 import os
 import tweepy
-from datetime import datetime, timedelta
+from datetime import timedelta
 from platformdirs import user_data_dir
 
 from . import create_app
 from . import database
 from .configuration import configuration
+
+logging.basicConfig(level=logging.INFO)
 
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
@@ -38,9 +39,9 @@ def collect_tweets_for_user(client, username, session_start, timing='pre', max_r
     session_start_dt = session_start
     if timing == 'pre':
         start_time = (session_start_dt - timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
-        end_time = (session_start_dt - timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        end_time = (session_start_dt - timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
     elif timing == 'post':
-        start_time = (session_start_dt + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        start_time = (session_start_dt + timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
         end_time = (session_start_dt + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
     else:
         raise ValueError("Timing must be 'pre' or 'post'")
@@ -50,7 +51,7 @@ def collect_tweets_for_user(client, username, session_start, timing='pre', max_r
     media_fields = "media_key,type,url,duration_ms,height,preview_image_url,public_metrics,width"
     expansions = "author_id,referenced_tweets.id,attachments.media_keys"
 
-    paginator = tweepy.Paginator(client.search_all_tweets,
+    paginator = tweepy.Paginator(client.search_recent_tweets,
                                  query=f"from:{username}",
                                  tweet_fields=tweet_fields,
                                  user_fields=user_fields,
@@ -102,7 +103,7 @@ def collect_tweets(user_id_list, timing='pre'):
                 json.dump(tweets, outfile, indent=4)
             logging.info(f"Done collecting {timing}-treatment tweets of {user_id=}")
         logging.info("Finished a chunk of 300 user_ids. Waiting for 15 minutes to respect rate limits...")
-        # time.sleep(900)  # 15-minute sleep after each chunk
+        time.sleep(900)  # 15-minute sleep after each chunk
     logging.info(f"Finished collecting {timing}-treatment tweets for all users!")
 
 

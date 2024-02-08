@@ -18,7 +18,11 @@ dependencies = [
     "platformdirs",
     "psycopg",
     "flask-cors",
-    "gunicorn"
+    "gunicorn",
+    "aiohttp",      # required for tweepy async?
+    "async-lru",    # required for tweepy async?
+    "oauthlib",     # required for tweepy async?
+    "schedule"
 ]
 readme = "README.md"
 requires-python = ">=3.10"

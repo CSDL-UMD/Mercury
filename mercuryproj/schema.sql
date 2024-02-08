@@ -105,7 +105,8 @@ CREATE TABLE eligibility (
     id SERIAL PRIMARY KEY,
     user_id VARCHAR(255),
     criteria VARCHAR(255),
-    passed BOOLEAN
+    passed BOOLEAN,
+    num_count VARCHAR(255)
 );
 
 ALTER TABLE eligibility

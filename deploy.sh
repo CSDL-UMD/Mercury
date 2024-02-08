@@ -4,7 +4,7 @@ set -euo pipefail
 
 if [[ ${#} != 1 ]];
 then
-    >&2 echo "Error: wrong number of arguments: ${*}"
+    >&2 echo "Error: wrong number of arguments: ${*:-0}"
     >&2 echo "Usage: ${0} CONF"
     >&2 echo "  CONF - path to config .INI file"
     exit 1

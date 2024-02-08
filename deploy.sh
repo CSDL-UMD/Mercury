@@ -4,7 +4,7 @@ set -euo pipefail
 
 if [[ ${#} != 1 ]];
 then
-    >&2 echo "Error: wrong number of arguments: ${*}"
+    >&2 echo "Error: wrong number of arguments: ${*:-0}"
     >&2 echo "Usage: ${0} CONF"
     >&2 echo "  CONF - path to config .INI file"
     exit 1
@@ -17,6 +17,7 @@ CONF=${1}
 SYSTEMDCONF=mercuryproj/samples/mercuryproj.service
 
 sshrun() {
+    # shellcheck disable=SC2029
     ssh "${USER}@${HOST}" "${@}"
 }
 
@@ -77,5 +78,5 @@ sshrun sudo systemctl enable mercuryproj
 sshrun sudo systemctl is-active mercuryproj && echo "Deployment successful." || echo "Deployment failed!"
 
 # Run health check
-resp=$(curl https://mercuryproj.umd.edu/health/check)
+resp=$(curl -s https://mercuryproj.umd.edu/health/check)
 echo "Health check: ${resp}"

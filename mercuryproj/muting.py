@@ -10,6 +10,7 @@ from platformdirs import user_data_dir
 import asyncio
 
 from . import database
+from . import create_app
 from .configuration import configuration
 from . import create_app
 
@@ -17,7 +18,6 @@ logging.basicConfig(level=logging.INFO)
 
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
-
 
 data_dir = user_data_dir(appname=__package__)
 if not os.path.exists(data_dir):
@@ -27,8 +27,7 @@ if not os.path.exists(data_dir):
 
 async def mute_users():
     # Getting newly updated users for muting
-    print("starting here!")
-    app  = create_app()
+    app = create_app()
     with app.app_context():
         users = database.get_mute_state()
         all_users_state = users.get("users_state", [])
@@ -81,45 +80,49 @@ async def mute_users():
                     print("here - here!!")
                 except Exception as e:
                     logging.error(f"Error: {e} for {user_id=} muting {target_user_id=}")
-        for user_id in tasks:
-            client, target_user_ids, mute_results = tasks[user_id]
-            directory = f"{data_dir}/muting_job/muted_results"
-            if not os.path.exists(directory):
-                logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-                os.mkdir(directory)
-            with open(f'{directory}/results_{user_id}.json', 'a') as f:
-                json.dump(mute_results, f, indent=4)
-
-            muted_response = await client.get_muted()
-            muted_list = [muted_response['data'][i]['id'] for i in range(muted_response['meta']['result_count'])]
-            num_muted = muted_response['meta']['result_count']
-            time_day = datetime.now().date()
-            muted_dict = {
-                "user_id": user_id,
-                "muted_list": json.dumps(muted_list),
-                "num_muted": num_muted,
-                "timestamp": time_day
-            }
-            # Save initial status for compliance check:
-            directory = f"{data_dir}/muting_job/compliance"
-            if not os.path.exists(directory):
-                logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-                os.mkdir(directory)
-            file_path = f"{directory}/file_{user_id}_{time_day}.json"
-            with open(file_path, 'w') as f:
-                f.write(json.dumps(muted_dict, indent=4))
-            # Store in DB:
-            response = database.store_mute_result(**muted_dict)
+        # for user_id in tasks:
+        #     client, target_user_ids, mute_results = tasks[user_id]
+        #     directory = f"{data_dir}/muting_job/muted_results"
+        #     if not os.path.exists(directory):
+        #         logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        #         os.mkdir(directory)
+        #     with open(f'{directory}/results_{user_id}.json', 'a') as f:
+        #         json.dump(mute_results, f, indent=4)
+        #
+        #     muted_response = await client.get_muted()
+        #     muted_list = [muted_response['data'][i]['id'] for i in range(muted_response['meta']['result_count'])]
+        #     num_muted = muted_response['meta']['result_count']
+        #     time_day = datetime.now().date()
+        #     muted_dict = {
+        #         "user_id": user_id,
+        #         "muted_list": json.dumps(muted_list),
+        #         "num_muted": num_muted,
+        #         "timestamp": time_day
+        #     }
+        #     # Save initial status for compliance check:
+        #     directory = f"{data_dir}/muting_job/compliance"
+        #     if not os.path.exists(directory):
+        #         logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        #         os.mkdir(directory)
+        #     file_path = f"{directory}/file_{user_id}_{time_day}.json"
+        #     with open(file_path, 'w') as f:
+        #         print(mute_results[0])
+        #         f.write(json.dumps(muted_dict, indent=4))
+        #     # Store in DB:
+        #     response = database.store_mute_result(**muted_dict)
             # Check if the response indicates success
-            if response.json().get('message') == "Data inserted successfully":
+            # if response.json().get('message') == "Data inserted successfully":
                 # Update state in store_mute_state
-                database.store_mute_state(user_id=user_id, state="Done")
-                logging.warning(f"Muting job for {user_id=} is done!")
+            database.store_mute_state(user_id=user_id, state="Done")
+            logging.warning(f"Muting job for {user_id=} is done!")
 
 
 async def main():
-    await mute_users()
+    taskm = asyncio.create_task(mute_users())
+    await taskm
+    # await mute_users()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(mute_users())

@@ -98,25 +98,28 @@ class Throttler:
                 access_token=access_token,
                 access_token_secret=access_token_secret,
                 return_type=dict,
-                wait_on_rate_limit=True,  # what does this mean? does this mean everything goes through?
+                # wait_on_rate_limit=True,  # what does this mean? does this mean everything goes through?
                 # hopefully it does not take more time to wait than just exiting and trying again next time
             )
-
+            new_time = time.time()
             try:
                 response = await client.mute(target_user_id=target_user_id)
                 # how do we figure out if the mutting failed for rate limit reason
+                logger.debug("We just want to see what is returned", extra={"Response":response})
                 success_mute_status = response['data']['muting']
                 logger.debug("Muting results",
                              extra={"user": user_id, "target": target_user_id, "status": success_mute_status})
             except Exception as e:
-                logger.error("muting failed", extra={"error": e, "user": user_id, "target": target_user_id})
-
+                logger.error("muting failed but why", extra={"error": e, "user": user_id, "target": target_user_id})
+                new_time += 1020
+                self.usernames_tomute[user_id].append(target_user_id)
+                
             # if "muting failed":
             #     self.usernames_tomute[user[1]].append(username)
 
             # assuming that we waited on rate limit we should be able to mute again right now
             # reset_time = ... #returned from twitter
-            item = (time.time(), user_id)
+            item = (new_time, user_id)
             heapq.heappush(self.users_ids, item)
 
 
@@ -156,7 +159,7 @@ def run():
     loop.run_until_complete(wakeup())
 
 
-schedule.every(100).seconds.do(run)
+schedule.every(1).seconds.do(run)
 
 
 def main():

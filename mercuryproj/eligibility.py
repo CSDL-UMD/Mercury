@@ -155,7 +155,7 @@ def get_muted_criteria(user_ids):
         directory = os.path.join(data_dir, "muting_job", "already_muted")
         if not os.path.exists(directory):
             logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-            os.mkdir(directory, exist_ok=True)
+            os.makedirs(directory, exist_ok=True)
 
         # Save the result to a JSON file per user if there are already muted low quality account
         if num_muted > 0:
@@ -221,7 +221,7 @@ def reverse_chron(user_ids):
         directory = os.path.join(data_dir, "reverse-chron-data")
         if not os.path.exists(directory):
             logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-            os.mkdir(directory, exist_ok=True)
+            os.makedirs(directory, exist_ok=True)
         with open(os.path.join(directory, f"reversechron-data-{user_id}.json"), 'a') as outfile:
             arr = []
             try:
@@ -257,59 +257,68 @@ def home_timeline_match(user_ids):
                 return None
         return None
 
-    logging.info(f'Start searching for low-quality accounts in home timeline data')
+    logging.info('Start searching for low-quality accounts in home timeline data')
 
     for user_id in user_ids:
         logging.info(f'Looking for low-quality accounts in home timeline data for {user_id=}.')
-        # Load JSON data
-        directory = os.path.join(data_dir, "reverse-chron-data")
-        if not os.path.exists(directory):
-            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-            os.mkdir(directory, exist_ok=True)
-        with open(os.path.join(directory, f"reversechron-data-{user_id}.json"), 'r') as outfile:
-            data = json.load(outfile)
 
         # Initialize empty list for matching target_user_ids
         hometimeline_match = []
 
-        for item in data:
-            author_id = item['author_id']
-            is_direct_match = str(author_id) in (str(target_user_id) for target_user_id in inventory['target_user_id'])
+        # Load JSON data
+        directory = os.path.join(data_dir, "reverse-chron-data")
+        if not os.path.exists(directory):
+            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+            os.makedirs(directory, exist_ok=True)
 
-            if is_direct_match:
-                hometimeline_match.append({"user_id": str(author_id), "match_type": "direct"})
-            else:
-                # Indirect matching for retweeted tweets
-                if "referenced_tweets" in item:
-                    for ref_tweet in item['referenced_tweets']:
-                        if ref_tweet['type'] == "retweeted" and 'mentions' in item['entities']:
-                            for mention in item['entities']['mentions']:
-                                if str(mention['id']) in (str(target_user_id) for target_user_id in
-                                                          inventory['target_user_id']):
+        file_path = os.path.join(directory, f"reversechron-data-{user_id}.json")
+        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+            with open(file_path, 'r') as outfile:
+                data = json.load(outfile)
+
+                for item in data:
+                    author_id = item['author_id']
+                    is_direct_match = str(author_id) in (str(target_user_id) for target_user_id in
+                                                         inventory['target_user_id'])
+
+                    if is_direct_match:
+                        hometimeline_match.append({"user_id": str(author_id), "match_type": "direct"})
+                    else:
+                        # Indirect matching for retweeted tweets
+                        if "referenced_tweets" in item:
+                            for ref_tweet in item['referenced_tweets']:
+                                if ref_tweet['type'] == "retweeted" and 'mentions' in item['entities']:
+                                    for mention in item['entities']['mentions']:
+                                        if str(mention['id']) in (str(target_user_id) for target_user_id in
+                                                                  inventory['target_user_id']):
+                                            hometimeline_match.append(
+                                                {"user_id": str(mention['id']), "match_type": "retweeted"})
+
+                        # Indirect matching for quoted tweets
+                        if 'urls' in item.get('entities', {}):
+                            for url_info in item['entities']['urls']:
+                                expanded_url = url_info.get('expanded_url', '')
+                                twitter_handle = extract_twitter_handle(expanded_url)
+                                if twitter_handle in target_usernames:
                                     hometimeline_match.append(
-                                        {"user_id": str(mention['id']), "match_type": "retweeted"})
+                                        {"user_id": author_id, "match_type": "quoted"})
 
-                # Indirect matching for quoted tweets
-                if 'urls' in item.get('entities', {}):
-                    for url_info in item['entities']['urls']:
-                        expanded_url = url_info.get('expanded_url', '')
-                        twitter_handle = extract_twitter_handle(expanded_url)
-                        if twitter_handle in target_usernames:
-                            hometimeline_match.append(
-                                {"user_id": author_id, "match_type": "quoted"})
+                pass_value = True if hometimeline_match else False
+                count = len(hometimeline_match)
+                database.store_eligibility(user_id, "hometimeline", pass_value, count)
 
-        pass_value = True if hometimeline_match else False
-        count = len(hometimeline_match)
-        database.store_eligibility(user_id, "hometimeline", pass_value, count)
+                # Saving the hometimeline_match information for each user_id
+                directory = os.path.join(data_dir, "eligibility", "hometimeline_match")
+                os.makedirs(directory, exist_ok=True)
 
-        # Saving the hometimeline_match information for each user_id
-        directory = os.path.join(data_dir, "eligibility", "hometimeline_match")
-        os.makedirs(directory, exist_ok=True)
-
-        with open(os.path.join(directory, f"match_for_{user_id}.json"), "w") as match_file:
-            json.dump({user_id: hometimeline_match}, match_file)
-        logging.info(f'Home timeline match for {user_id=} done!')
-    logging.info(f'End searching for low-quality accounts in home timeline data')
+                with open(os.path.join(directory, f"match_for_{user_id}.json"), "w") as match_file:
+                    json.dump({user_id: hometimeline_match}, match_file)
+                logging.info(f'Home timeline match for {user_id=} done!')
+        else:
+            logging.warning(f"JSON file {file_path} is either empty or does not exist for user {user_id}. Skipping.")
+            # Store eligibility as False and count as 0 since the timeline data is empty
+            database.store_eligibility(user_id, "hometimeline", False, 0)
+    logging.info('End searching for low-quality accounts in home timeline data')
 
 
 def relationship_check(user_ids):
@@ -345,7 +354,7 @@ def relationship_check(user_ids):
         # List to save the results
         all_data = []
 
-        for index, chunk in enumerate(chunks[:4]):
+        for index, chunk in enumerate(chunks):
             params = {
                 'ids': ','.join(chunk),
                 'user.fields': 'connection_status'
@@ -405,10 +414,10 @@ def main():
     app = create_app()
     with app.app_context():
         user_ids = database.get_all_users()
-        # save_user_info(user_ids)
+        save_user_info(user_ids)
         get_muted_criteria(user_ids)
         reverse_chron(user_ids)
-        home_timeline_match(user_ids)
+        home_timeline_match(user_ids)   # this should be run after reverse_chron() is done
         relationship_check(user_ids)
         update_eligibility_from_json()
  

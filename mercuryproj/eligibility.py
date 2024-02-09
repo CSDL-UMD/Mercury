@@ -83,15 +83,15 @@ def save_user_info(user_ids):
 
         created_at_str = data['created_at'].replace("Z", "UTC")
         created_at_dt = dt.strptime(created_at_str, "%Y-%m-%dT%H:%M:%S.%f%Z")
-        min_date = dt(2023, 10, 24)
+        min_date = dt(2023, 11, 1)
 
         public_metrics = data['public_metrics']
 
         if created_at_dt < min_date:
-            logging.info(f"{user_id=}'s account created before Oct 24 2023")
+            logging.info(f"{user_id=}'s account created before Nov 1 2023")
             database.store_eligibility(user_id, "account_created", True, "na")
         else:
-            logging.info(f"{user_id=}'s account created after Oct 23 2023")
+            logging.info(f"{user_id=}'s account created after Nov 1 2023")
             database.store_eligibility(user_id, "account_created", False, "na")
 
         row = [user_id, created_at_str, public_metrics]
@@ -165,7 +165,7 @@ def get_muted_criteria(user_ids):
         # Decide pass_value based on num_muted
         pass_value = True if num_muted <= 94 else False
         # Store eligibility check result:
-        database.store_eligibility(user_id, "already_muted", pass_value, "na")
+        database.store_eligibility(user_id, "already_muted", pass_value, num_muted)
         logging.info(f'Getting muted accounts list for {user_id=} done!')
     logging.info(f'End getting muted criteria')
 
@@ -299,7 +299,8 @@ def home_timeline_match(user_ids):
                                 {"user_id": author_id, "match_type": "quoted"})
 
         pass_value = True if hometimeline_match else False
-        database.store_eligibility(user_id, "hometimeline", pass_value, "na")
+        count = len(hometimeline_match)
+        database.store_eligibility(user_id, "hometimeline", pass_value, count)
 
         # Saving the hometimeline_match information for each user_id
         directory = os.path.join(data_dir, "eligibility", "hometimeline_match")
@@ -400,57 +401,6 @@ def update_eligibility_from_json():
             logging.info(f'Ended for {user_id=}')
 
 
-def filter_active_inventory():
-    # Initialize OAuth
-    auth = OAuth1(
-        client_key=cred['key'],
-        client_secret=cred['key_secret'],
-        resource_owner_key=cred['access_token'],
-        resource_owner_secret=cred['access_token_secret']
-    )
-
-    # Ensure all target_user_ids are strings
-    target_usernames_list = list(map(str, target_usernames))
-
-    # Create chunks
-    chunk_size = 100
-    chunks = [target_usernames_list[i:i + chunk_size] for i in range(0, len(target_usernames_list), chunk_size)]
-
-    # List to save the results
-    active_accounts = []
-
-    # Process each chunk
-    for index, chunk in enumerate(chunks):
-        params = {'usernames': ','.join(chunk)}
-        try:
-            response = requests.get("https://api.twitter.com/2/users/by", auth=auth, params=params)
-            if response.status_code == 200:
-                data = response.json()
-                if 'data' in data:
-                    for account in data['data']:
-                        active_accounts.append(str(account['id']))
-            else:
-                logging.error(f"Error with status code {response.status_code} for chunk {index}")
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Request failed for chunk {index}: {e}")
-
-    # Filter the inventory DataFrame
-    inventory['target_user_id'] = inventory['target_user_id'].astype(str)
-    active_inventory = inventory[inventory['target_user_id'].isin(active_accounts)]
-
-    if active_inventory.empty:
-        logging.info("No active accounts found in the filtered inventory.")
-    else:
-        logging.info(f"Active accounts found: {len(active_inventory)}")
-
-    # Creating directory and saving the data
-    directory = os.path.join(data_dir, "active_accounts")
-    os.makedirs(directory, exist_ok=True)
-    active_inventory.to_json(os.path.join(directory, 'active_inventory.json'), orient='index')
-
-    logging.info("Filtered active accounts saved as JSON.")
-
-
 def main():
     app = create_app()
     with app.app_context():
@@ -461,7 +411,6 @@ def main():
         home_timeline_match(user_ids)
         relationship_check(user_ids)
         update_eligibility_from_json()
-        filter_active_inventory()
  
 
 if __name__ == "__main__":

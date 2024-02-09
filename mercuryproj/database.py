@@ -284,13 +284,18 @@ def get_mute_state():
     return {"users_state": users_state}
 
 
-def store_mute_result(user_id, muted_list, num_muted, timestamp):
-    logging.info(f"Store {user_id=}'s mute result: {muted_list=}, {num_muted=}, {timestamp=}")
+def store_mute_result(user_id, target_user_id, mute_result, timestamp):
+    logging.info(f"Store {user_id=}'s mute result: {target_user_id=}, {mute_result=}, {timestamp=}")
     connection = getdb()
     cursor = connection.cursor()
-    # Insert the data into the mute_result table
-    sql_insert = """INSERT INTO mute_result (user_id, muted_list, num_muted, timestamp) VALUES (%s, %s, %s, %s)"""
-    cursor.execute(sql_insert, (user_id, muted_list, num_muted, timestamp))
+    # Insert the data into the mute_result table or update it if the same user_id and target_user_id combination exists
+    sql_insert = """
+    INSERT INTO mute_result (user_id, target_user_id, mute_result, timestamp) 
+    VALUES (%s, %s, %s, %s) 
+    ON CONFLICT (user_id, target_user_id) 
+    DO UPDATE SET mute_result = EXCLUDED.mute_result, timestamp = EXCLUDED.timestamp;
+    """
+    cursor.execute(sql_insert, (user_id, target_user_id, mute_result, timestamp))
     connection.commit()
     cursor.close()
     return jsonify(message="Data inserted successfully")
@@ -411,7 +416,7 @@ def get_dm2():
 def get_all_users():
     connection = getdb()
     cursor = connection.cursor()
-    cursor.execute("SELECT user_id FROM mercury_user")
+    cursor.execute("SELECT user_id FROM users_for_elig_test")
     user_ids = [row[0] for row in cursor.fetchall()]
     cursor.close()
     # Return the list of user_ids

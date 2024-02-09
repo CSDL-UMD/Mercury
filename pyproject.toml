@@ -22,7 +22,8 @@ dependencies = [
     "aiohttp",      # required for tweepy async?
     "async-lru",    # required for tweepy async?
     "oauthlib",     # required for tweepy async?
-    "schedule"
+    "schedule",
+    "gevent"
 ]
 readme = "README.md"
 requires-python = ">=3.10"

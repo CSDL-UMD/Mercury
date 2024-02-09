@@ -155,7 +155,7 @@ def get_muted_criteria(user_ids):
         directory = os.path.join(data_dir, "muting_job", "already_muted")
         if not os.path.exists(directory):
             logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-            os.mkdir(directory)
+            os.mkdir(directory, exist_ok=True)
 
         # Save the result to a JSON file per user if there are already muted low quality account
         if num_muted > 0:
@@ -221,7 +221,7 @@ def reverse_chron(user_ids):
         directory = os.path.join(data_dir, "reverse-chron-data")
         if not os.path.exists(directory):
             logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-            os.mkdir(directory)
+            os.mkdir(directory, exist_ok=True)
         with open(os.path.join(directory, f"reversechron-data-{user_id}.json"), 'a') as outfile:
             arr = []
             try:
@@ -265,7 +265,7 @@ def home_timeline_match(user_ids):
         directory = os.path.join(data_dir, "reverse-chron-data")
         if not os.path.exists(directory):
             logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-            os.mkdir(directory)
+            os.mkdir(directory, exist_ok=True)
         with open(os.path.join(directory, f"reversechron-data-{user_id}.json"), 'r') as outfile:
             data = json.load(outfile)
 
@@ -405,7 +405,7 @@ def main():
     app = create_app()
     with app.app_context():
         user_ids = database.get_all_users()
-        save_user_info(user_ids)
+        # save_user_info(user_ids)
         get_muted_criteria(user_ids)
         reverse_chron(user_ids)
         home_timeline_match(user_ids)

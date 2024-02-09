@@ -405,7 +405,7 @@ def main():
     app = create_app()
     with app.app_context():
         user_ids = database.get_all_users()
-        save_user_info(user_ids)
+        # save_user_info(user_ids)
         get_muted_criteria(user_ids)
         reverse_chron(user_ids)
         home_timeline_match(user_ids)

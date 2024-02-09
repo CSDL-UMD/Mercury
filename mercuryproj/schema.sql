@@ -59,9 +59,10 @@ DROP TABLE IF EXISTS mute_result;
 CREATE TABLE mute_result (
     id SERIAL PRIMARY KEY,
     user_id VARCHAR(255),
-    muted_list JSON,
-    num_muted VARCHAR(255),
-    timestamp TIMESTAMP
+    target_user_id VARCHAR(255),
+    mute_result VARCHAR(255),
+    timestamp TIMESTAMP,
+    UNIQUE(user_id, target_user_id)
 );
 
 DROP TABLE IF EXISTS DM1;
@@ -106,8 +107,23 @@ CREATE TABLE eligibility (
     user_id VARCHAR(255),
     criteria VARCHAR(255),
     passed BOOLEAN,
-    num_count VARCHAR(255)
+    num_count VARCHAR(255),
+    UNIQUE(user_id, criteria)
 );
 
-ALTER TABLE eligibility
-ADD CONSTRAINT user_criteria_unique UNIQUE (user_id, criteria);
+
+-- Create a new table to store data from the CSV file
+CREATE TABLE users_for_elig_test (
+    user_id VARCHAR(255),
+    screen_name VARCHAR(255),
+    vsid VARCHAR(255)
+);
+
+-- Copy data from a CSV file into the newly created table
+
+-- Create a view that combines information from the mercury_user table and the users_for_elig_test table
+CREATE VIEW mercury_users_with_vsid AS
+SELECT m.user_id, m.screen_name, u.vsid
+FROM mercury_user m
+-- Perform an inner join on the mercury_user table and the users_for_elig_test table
+INNER JOIN users_for_elig_test u ON m.user_id = u.user_id;

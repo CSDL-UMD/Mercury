@@ -25,8 +25,6 @@ from . import create_app
 from . import database
 from .configuration import configuration
 
-logging.basicConfig(level=logging.INFO)
-
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
 
@@ -411,6 +409,7 @@ def update_eligibility_from_json():
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
         user_ids = database.get_all_users()

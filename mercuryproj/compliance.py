@@ -21,7 +21,6 @@ from . import create_app
 from . import database
 from .configuration import configuration
 
-logging.basicConfig(level=logging.INFO)
 
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
@@ -412,6 +411,7 @@ def mute_compliance():
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
         dm1()

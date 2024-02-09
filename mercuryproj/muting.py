@@ -10,8 +10,6 @@ from . import database
 from .configuration import configuration
 
 
-logging.basicConfig(level=logging.INFO)
-
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
 
@@ -67,6 +65,7 @@ def mute_users_in_chunks(user_id, target_user_ids):
         return_type=dict,
         wait_on_rate_limit=True
     )
+    database.store_mute_state(user_id=user_id, state="In Progress")
 
     for i in range(0, len(target_user_ids), chunk_size):
         chunk = target_user_ids[i:i + chunk_size]
@@ -76,6 +75,7 @@ def mute_users_in_chunks(user_id, target_user_ids):
                 success_mute_status = str(response['data']['muting'])
                 try:
                     database.store_mute_result(user_id, target_user_id, success_mute_status, datetime.now())
+                    print(f"in chunking: {logging.getLogger().getEffectiveLevel()}")
                     logging.info(f"Successfully muted {target_user_id} for {user_id=}.")
                 except Exception as e:
                     logging.error(f"Failed to store mute result for {user_id=} muting {target_user_id=}: {e}")
@@ -91,14 +91,17 @@ def mute_users_in_chunks(user_id, target_user_ids):
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
+    print(f"after create_app: {logging.getLogger().getEffectiveLevel()}")
     with app.app_context():
         new_users = get_new_users()
         for user_id in new_users:
-            logging.warning(f"Muting job for {user_id=} starts!")
+            logging.info(f"Muting job for {user_id=} starts!")
             target_user_ids = get_muting_list_for_user(user_id)
             mute_users_in_chunks(user_id, target_user_ids)
-            logging.warning(f"Muting job for {user_id=} is done!")
+            database.store_mute_state(user_id=user_id, state="Done")
+            logging.info(f"Muting job for {user_id=} is done!")
 
 
 if __name__ == "__main__":

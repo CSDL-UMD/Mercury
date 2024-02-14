@@ -509,8 +509,11 @@ def get_exposure():
 
         # Loop through the dictionary and add the IDs to author_ids
         for ids in hometimeline_data.values():
-            author_ids.extend(ids)
+            for item in ids:
+                author_ids.append(item['user_id'])
 
+        # Convert list to set to eliminate duplicates
+        author_ids = list(set(author_ids))
         # author_ids: a list of strings & integers for data type match
         author_ids = set(int(author_id) for author_id in author_ids)
 
@@ -577,7 +580,7 @@ def get_exposure():
             # Concatenate all selected handles
             all_handles = top_4_muted_handles + [highest_followed_nonmuted] + selected_non_muted_handles
             all_handles_str = [str(handle) for handle in all_handles]  # Ensure all handles are strings
-        return "$$$".join(all_handles_str)
+            return "$$$".join(all_handles_str)
     else:
         # Randomly select 7 accounts from the top_10 list
         all_handles = random.sample(top_10, 7)

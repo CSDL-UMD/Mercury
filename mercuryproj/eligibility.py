@@ -298,8 +298,20 @@ def home_timeline_match(user_ids):
                                 expanded_url = url_info.get('expanded_url', '')
                                 twitter_handle = extract_twitter_handle(expanded_url)
                                 if twitter_handle in target_usernames:
-                                    hometimeline_match.append(
-                                        {"user_id": author_id, "match_type": "quoted"})
+                                    try:
+                                        # Find the index of the twitter_handle in the target_usernames list
+                                        handle_index = target_usernames.index(twitter_handle)
+                                        # Use the same index to retrieve the corresponding target_user_id from the target_user_ids
+                                        matched_target_user_id = target_user_ids[handle_index]
+                                        hometimeline_match.append(
+                                            {"user_id": str(matched_target_user_id), "match_type": "quoted"})
+                                    except ValueError:
+                                        # Handle the case where the twitter_handle is not found in the target_usernames list
+                                        logging.error(f"twitter_handle not found in target_usernames: {twitter_handle}")
+                                    except IndexError:
+                                        # Handle the case where the index is out of bounds for the target_user_ids list
+                                        logging.error(
+                                            f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
 
                 pass_value = True if hometimeline_match else False
                 count = len(hometimeline_match)

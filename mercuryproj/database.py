@@ -184,6 +184,22 @@ def store_following(user_id, success, session_start):
     connection.commit()
 
 
+def get_wave2_exposure(user_id):
+    # Connect to the database and fetch all entries of user_id
+    connection = getdb()
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM wave2_exposure_table WHERE user_id = %s;", (user_id,))
+    result = cursor.fetchall()
+
+    # Create a list of dictionaries to hold each row's data
+    users_exposure = [{"user_id": item[0], "target_user_id": item[1], "twitter_handle": item[2], "followers": item[3],
+                       "following": item[4], "hometimeline": item[5]} for item in result]
+    cursor.close()
+    connection.commit()
+    # Return the list of dictionaries
+    return users_exposure
+
+
 def store_follow_politifact(user_id, success, session_start):
     logging.info(f"Following Politifact account: {user_id=}, {session_start=}")
     sql_insert = """INSERT INTO following_politifact (user_id, success, session_start)

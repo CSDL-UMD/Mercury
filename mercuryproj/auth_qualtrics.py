@@ -322,6 +322,54 @@ def store_vsid():
     return "Stored vsid"
 
 
+@bp.route('/wave2_exposure', methods=['GET', 'POST'])
+def wave2_exposure():
+    """
+    In the Wave 2 survey, this endpoint is called.
+    This function receives user_id from Qualtrics and retrieve wave2_exposure_table entries from DB,
+    The purpose of this function is to filter based on each user_id's following, hometimeliine eligibility result and
+    return followed_account1-2 and hometimeline_account1-2 (if any) as well as other_account1-2 to Qualtrics.
+    """
+    user_id = request.args.get("user_id").strip()
+
+    # store in DB:
+    insert_group_payload = {
+        "user_id": user_id
+    }
+    user_exposure = database.get_wave2_exposure(**insert_group_payload)
+    twitter_handles = [item['twitter_handle'] for item in user_exposure]
+
+    # Load inventory with target user ids
+    inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")))
+    inventory_sorted = inventory.sort_values(by="followers", ascending=False)
+    target_usernames = inventory_sorted["twitter_handle"].tolist()
+
+    # Extract two target_usernames elements that are not in twitter_handles
+    not_in_user_exposure = [username for username in target_usernames if username not in twitter_handles][:2]
+    other_account1 = not_in_user_exposure[0]
+    other_account2 = not_in_user_exposure[1]
+
+    # Following == TRUE & Hometimeline == FALSE
+    followed_accounts = [e for e in user_exposure if e['following'] == 'TRUE' and e['hometimeline'] == 'FALSE']
+    followed_accounts_sorted = sorted(followed_accounts, key=lambda x: int(x['followers']), reverse=True)
+
+    # Following == FALSE & Hometimeline == TRUE
+    hometimeline_accounts = [e for e in user_exposure if e['following'] == 'FALSE' and e['hometimeline'] == 'TRUE']
+    hometimeline_accounts_sorted = sorted(hometimeline_accounts, key=lambda x: int(x['followers']), reverse=True)
+
+    followed_account1 = followed_accounts_sorted[0]['twitter_handle'] if followed_accounts_sorted else "NULL"
+    followed_account2 = followed_accounts_sorted[1]['twitter_handle'] if len(followed_accounts_sorted) > 1 else "NULL"
+    hometimeline_account1 = hometimeline_accounts_sorted[0]['twitter_handle'] if hometimeline_accounts_sorted else "NULL"
+    hometimeline_account2 = hometimeline_accounts_sorted[1]['twitter_handle'] if len(
+        hometimeline_accounts_sorted) > 1 else "NULL"
+
+    result = f"{followed_account1}$$${followed_account2}$$$" \
+             f"{hometimeline_account1}$$${hometimeline_account2}$$$" \
+             f"{other_account1}$$${other_account2}"
+
+    return result
+
+
 @bp.route('/store_group', methods=['GET', 'POST'])
 def store_group():
     """

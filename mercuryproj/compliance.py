@@ -414,10 +414,10 @@ def main():
     logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
+        muting_relationship_check()
         dm1()
         dm2()
         dm3()
-        muting_relationship_check()
         mute_compliance()
 
 

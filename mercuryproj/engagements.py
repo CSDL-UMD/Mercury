@@ -10,7 +10,7 @@ import json
 import logging
 import os
 import tweepy
-from datetime import timedelta
+from datetime import datetime, timedelta
 from platformdirs import user_data_dir
 
 from . import create_app
@@ -40,7 +40,8 @@ def collect_tweets_for_user(client, username, session_start, timing='pre', max_r
         end_time = (session_start_dt - timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
     elif timing == 'post':
         start_time = (session_start_dt + timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
-        end_time = (session_start_dt + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        # end_time = (session_start_dt + timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        end_time = (datetime.now() - timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
     else:
         raise ValueError("Timing must be 'pre' or 'post'")
     # Predefined fields

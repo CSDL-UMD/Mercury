@@ -357,11 +357,11 @@ def wave2_exposure():
     hometimeline_accounts = [e for e in user_exposure if e['following'] == 'FALSE' and e['hometimeline'] == 'TRUE']
     hometimeline_accounts_sorted = sorted(hometimeline_accounts, key=lambda x: int(x['followers']), reverse=True)
 
-    followed_account1 = followed_accounts_sorted[0]['twitter_handle'] if followed_accounts_sorted else "NULL"
-    followed_account2 = followed_accounts_sorted[1]['twitter_handle'] if len(followed_accounts_sorted) > 1 else "NULL"
-    hometimeline_account1 = hometimeline_accounts_sorted[0]['twitter_handle'] if hometimeline_accounts_sorted else "NULL"
+    followed_account1 = followed_accounts_sorted[0]['twitter_handle'] if followed_accounts_sorted else "0"
+    followed_account2 = followed_accounts_sorted[1]['twitter_handle'] if len(followed_accounts_sorted) > 1 else "0"
+    hometimeline_account1 = hometimeline_accounts_sorted[0]['twitter_handle'] if hometimeline_accounts_sorted else "0"
     hometimeline_account2 = hometimeline_accounts_sorted[1]['twitter_handle'] if len(
-        hometimeline_accounts_sorted) > 1 else "NULL"
+        hometimeline_accounts_sorted) > 1 else "0"
 
     result = f"{followed_account1}$$${followed_account2}$$$" \
              f"{hometimeline_account1}$$${hometimeline_account2}$$$" \

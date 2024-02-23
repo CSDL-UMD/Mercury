@@ -20,12 +20,12 @@ if not os.path.exists(data_dir):
     os.mkdir(data_dir)
 
 
-def get_new_users():
+def get_unmute_users():
     # Getting newly updated users for muting
     users = database.get_mute_state()
     all_users_state = users.get("users_state", [])
-    # Filter user_ids with state="New"
-    new_users = [user_info["user_id"] for user_info in all_users_state if user_info["state"] == "New"]
+    # Filter user_ids with state="unmute"
+    new_users = [user_info["user_id"] for user_info in all_users_state if user_info["state"] == "unmute"]
     return new_users
 
 
@@ -42,7 +42,7 @@ def get_muting_list_for_user(user_id):
     return target_user_ids
 
 
-def mute_users_in_chunks(user_id, target_user_ids):
+def unmute_users_in_chunks(user_id, target_user_ids):
     chunk_size = 50  # Rate limit consideration
     wait_time = 15 * 60  # 15 minutes wait time in seconds
 
@@ -71,7 +71,7 @@ def mute_users_in_chunks(user_id, target_user_ids):
         chunk = target_user_ids[i:i + chunk_size]
         for target_user_id in chunk:
             try:
-                response = client.mute(target_user_id=target_user_id)
+                response = client.unmute(target_user_id=target_user_id)
                 success_mute_status = str(response['data']['muting'])
                 try:
                     database.store_mute_result(user_id, target_user_id, success_mute_status, datetime.now())
@@ -93,13 +93,13 @@ def main():
     logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
-        new_users = get_new_users()
-        for user_id in new_users:
-            logging.info(f"Muting job for {user_id=} starts!")
+        unmute_users = get_unmute_users()
+        for user_id in unmute_users:
+            logging.info(f"Unmuting job for {user_id=} starts!")
             target_user_ids = get_muting_list_for_user(user_id)
-            mute_users_in_chunks(user_id, target_user_ids)
+            unmute_users_in_chunks(user_id, target_user_ids)
             database.store_mute_state(user_id=user_id, state="Done")
-            logging.info(f"Muting job for {user_id=} is done!")
+            logging.info(f"Unmuting job for {user_id=} is done!")
 
 
 if __name__ == "__main__":

@@ -396,11 +396,13 @@ def store_group():
 
     # retrieve low quality accounts inventory
     inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")))
-    # cutoff : ADD cutoff line here !!
-    inventory = inventory.sort_values(by='exposure', ascending=False)  # order by exposure
-    num_groups = len(inventory) // 10
+    # cutoff (95%)
+    reduced_inventory = inventory[:489]
+    # order by exposure per Option 2
+    reduced_inventory = reduced_inventory.sort_values(by='exposure', ascending=False)
+    num_groups = len(reduced_inventory) // 10
     muted_list = []
-    end_idx = 311  # initial number -> increase it
+    end_idx = 0  # initial number
     for j in range(num_groups):
         # Select each group of 10 accounts and sample a fraction without replacement
         start_idx = j * 10
@@ -409,8 +411,8 @@ def store_group():
         sample_df = group_df.sample(frac=0.7, replace=False)
         muted_list.extend(sample_df.to_dict('records'))
     # If we have not reached the total samples, add more from the remaining data
-    while len(muted_list) < 219:    # change the numbers here
-        remaining_samples = 219 - len(muted_list)
+    while len(muted_list) < 342:    # change the numbers here
+        remaining_samples = 342 - len(muted_list)
         remaining_df = inventory.iloc[end_idx:]  # Remaining data after the last group
         extra_samples = remaining_df.sample(n=min(len(remaining_df), remaining_samples), replace=False)
         muted_list.extend(extra_samples.to_dict('records'))
@@ -531,13 +533,16 @@ def get_exposure():
     """
     Wave 3
     """
-    user_id = request.args.get("user_id").strip()
-    randomized_group = request.args.get("randomized_group").strip()
-    logging.info(f"Getting exposure of {user_id=} with {randomized_group=}")
+    if "user_id" in request.args:
+        user_id = request.args.get("user_id").strip()
+    else:
+        abort(500, "No user_id specified. Aborting.")
+    logging.info(f"Getting exposure of {user_id=}")
 
     # top 10 with most followers
-    top_10 = ["FoxNews", "CGTNOfficial", "XHNews", "TuckerCarlson", "DonaldJTrumpJr", "Cobratate", "AJEnglish",
-              "PDChina", "seanhannity", "tedcruz"]
+    top_10 = ["FoxNews", "CGTNOfficial", "XHNews", "TuckerCarlson",
+              "DonaldJTrumpJr", "Cobratate", "AJEnglish",
+              "PDChina", "seanhannity", "wikileaks"]
 
     # Load the muted accounts data
     directory = f"{data_dir}/muting_job/muted_accounts"
@@ -547,7 +552,6 @@ def get_exposure():
     muted_accounts_file = os.path.join(directory, f"muted_accounts_for_{user_id}.json")
     with open(muted_accounts_file, 'r') as file:
         muted_data = json.load(file)
-
     # Load hometimeline match data
     directory = f"{data_dir}/eligibility/hometimeline_match"
     if not os.path.exists(directory):
@@ -558,12 +562,10 @@ def get_exposure():
     matched_accounts = []
     with open(hometimeline_match_file, 'r') as file:
         hometimeline_data = json.load(file)
-
     # Loop through the dictionary and add the IDs to author_ids
     for ids in hometimeline_data.values():
         for item in ids:
             author_ids.append(item['user_id'])
-
     # Convert all author_ids to strings and eliminate duplicates in one step
     author_ids = set(str(author_id) for author_id in author_ids)
 
@@ -574,9 +576,9 @@ def get_exposure():
             matched_accounts.append(target_user_id)  # Add the matched account
 
     # Update lq_followed_and_muted based on whether any matches were found
-    lq_followed_and_muted = 'T' if matched_accounts else 'F'
+    lq_hometimeline_and_muted = 'T' if matched_accounts else 'F'
 
-    if lq_followed_and_muted == 'T':
+    if lq_hometimeline_and_muted == 'T':
         # Convert matched accounts to a set of integers for comparison
         matched_accounts_set = set(matched_accounts)
 
@@ -619,17 +621,30 @@ def get_exposure():
             return_type=dict,
             wait_on_rate_limit=True
         )
-        response = client.get_users(ids=list(author_ids), user_auth=True, user_fields='public_metrics')
-        highest_followed_nonmuted = max(response['data'],
-                                        key=lambda x: x['public_metrics']['followers_count'])['username']
+
+        if list(author_ids):  # check if author_ids is not empty (no hometimeline tweet)
+            response = client.get_users(ids=list(author_ids), user_auth=True, user_fields='public_metrics')
+            response['data'] = [user for user in response['data'] if user['username'] not in top_4_muted_handles]
+            highest_followed_nonmuted = max(response['data'], key=lambda x: x['public_metrics']['followers_count'])['username']
+        else:  # if there is no low quality accounts in hometimeline
+            highest_followed_nonmuted = None
 
         # Select top 2 followed accounts from top_10, excluding the ones already selected
-        filtered_top_10 = [handle for handle in top_10 if
-                           handle not in top_7_muted_handles and handle != highest_followed_nonmuted]
-        selected_non_muted_handles = filtered_top_10[:2]
+        if highest_followed_nonmuted:
+            filtered_top_10 = [handle for handle in top_10 if
+                               handle not in top_7_muted_handles and handle != highest_followed_nonmuted]
+            selected_non_muted_handles = filtered_top_10[:2]
+        else:
+            filtered_top_10 = [handle for handle in top_10 if
+                               handle not in top_7_muted_handles and handle != highest_followed_nonmuted]
+            selected_non_muted_handles = filtered_top_10[:3]
 
         # Concatenate all selected handles
-        all_handles = top_4_muted_handles + [highest_followed_nonmuted] + selected_non_muted_handles
+        # all_handles = top_4_muted_handles + [highest_followed_nonmuted] + selected_non_muted_handles
+        all_handles = top_4_muted_handles + [
+            highest_followed_nonmuted] + selected_non_muted_handles if highest_followed_nonmuted else (
+                top_4_muted_handles + selected_non_muted_handles)
+
         all_handles_str = [str(handle) for handle in all_handles]  # Ensure all handles are strings
         return "$$$".join(all_handles_str)
 

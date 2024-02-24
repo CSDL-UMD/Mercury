@@ -34,7 +34,8 @@ if not os.path.exists(data_dir):
     os.mkdir(data_dir)
 
 # Load inventory with target user ids
-inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")))
+inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")),
+                        dtype={"target_user_id": str, "twitter_handle": str})
 target_user_ids = inventory["target_user_id"].tolist()
 target_usernames = inventory["twitter_handle"].tolist()
 

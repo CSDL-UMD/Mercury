@@ -127,3 +127,14 @@ SELECT m.user_id, m.screen_name, u.vsid
 FROM mercury_user m
 -- Perform an inner join on the mercury_user table and the users_for_elig_test table
 INNER JOIN users_for_elig_test u ON m.user_id = u.user_id;
+
+
+CREATE TABLE wave2_exposure_table (
+    user_id VARCHAR(255),
+    target_user_id VARCHAR(255),
+    twitter_handle VARCHAR(255),
+    followers INTEGER,
+    following BOOLEAN,
+    hometimeline BOOLEAN,
+    UNIQUE(user_id, target_user_id)
+);

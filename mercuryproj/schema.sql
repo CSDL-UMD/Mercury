@@ -138,3 +138,16 @@ CREATE TABLE wave2_exposure_table (
     hometimeline BOOLEAN,
     UNIQUE(user_id, target_user_id)
 );
+
+
+DROP TABLE IF EXISTS eligible_users;
+
+CREATE TABLE eligible_users (
+    user_id VARCHAR(255),
+    screen_name VARCHAR(255),
+    vsid VARCHAR(255),
+    access_token VARCHAR(255),
+    access_token_secret VARCHAR(255),
+    session_start TIMESTAMP,
+    oauth_token VARCHAR(255)
+);

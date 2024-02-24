@@ -28,7 +28,7 @@ if not os.path.exists(data_dir):
 bearer_token = cred['bearer_token'].replace('%%', '%')
 
 
-def collect_tweets_for_user(client, username, session_start, timing='pre', max_results=150):
+def collect_tweets_for_user(client, username, session_start, timing='pre', max_results=300):
     """
     max_results could be changed
     Pro access allows up to max_results=500.
@@ -182,9 +182,9 @@ def main():
     logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
-        user_ids = database.get_all_users()
+        user_ids = database.get_eligible_users()
         collect_tweets(user_ids, timing='pre')
-        collect_tweets(user_ids, timing='post')
+        # collect_tweets(user_ids, timing='post')
         collect_likes(user_ids)
 
 

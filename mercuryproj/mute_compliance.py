@@ -7,13 +7,9 @@ import csv
 import json
 import logging
 import os
-import tweepy
-import requests
-from requests_oauthlib import OAuth1
 from datetime import datetime
 from platformdirs import user_data_dir
 from . import create_app
-from . import database
 from .configuration import configuration
 
 

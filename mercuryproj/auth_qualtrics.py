@@ -16,7 +16,6 @@ from .configuration import configuration
 
 bp = Blueprint("auth_qualtrics", __name__, url_prefix="/auth_qualtrics")
 
-
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
 
@@ -25,7 +24,6 @@ request_token_url = str(webInformation['request_token_url'])
 access_token_url = str(webInformation['access_token_url'])
 authorize_url = str(webInformation['authorize_url'])
 survey_url = str(webInformation['survey_url'])
-
 
 data_dir = user_data_dir(appname=__package__)
 if not os.path.exists(data_dir):
@@ -195,11 +193,11 @@ def following():
 
     # make a tweepy client
     client = tweepy.Client(
-            consumer_key=cred['key'],
-            consumer_secret=cred['key_secret'],
-            access_token=access_token,
-            access_token_secret=access_token_secret,
-            return_type=dict)
+        consumer_key=cred['key'],
+        consumer_secret=cred['key_secret'],
+        access_token=access_token,
+        access_token_secret=access_token_secret,
+        return_type=dict)
     # target_follow_id: Mercury study account!
     target_follow_id = "1691551574550519808"
     # Try the following
@@ -323,12 +321,6 @@ def store_vsid():
 
 @bp.route('/wave2_exposure', methods=['GET', 'POST'])
 def wave2_exposure():
-    """
-    In the Wave 2 survey, this endpoint is called.
-    This function receives user_id from Qualtrics and retrieve wave2_exposure_table entries from DB,
-    The purpose of this function is to filter based on each user_id's following, hometimeliine eligibility result and
-    return followed_account1-2 and hometimeline_account1-2 (if any) as well as other_account1-2 to Qualtrics.
-    """
     user_id = request.args.get("user_id").strip()
 
     # store in DB:
@@ -336,35 +328,45 @@ def wave2_exposure():
         "user_id": user_id
     }
     user_exposure = database.get_wave2_exposure(**insert_group_payload)
+
     twitter_handles = [item['twitter_handle'] for item in user_exposure]
 
     # Load inventory with target user ids
-    inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")))
+    inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")),
+                            dtype={"target_user_id": str, "twitter_handle": str, "name_with_handle": str})
     inventory_sorted = inventory.sort_values(by="followers", ascending=False)
-    target_usernames = inventory_sorted["twitter_handle"].tolist()
 
-    # Extract two target_usernames elements that are not in twitter_handles
-    not_in_user_exposure = [username for username in target_usernames if username not in twitter_handles][:2]
-    other_account1 = not_in_user_exposure[0]
-    other_account2 = not_in_user_exposure[1]
+    # Map twitter_handles to name_with_handles
+    handle_to_name_with_handle = dict(zip(inventory_sorted["twitter_handle"], inventory_sorted["name_with_handle"]))
 
-    # Following == TRUE & Hometimeline == FALSE
-    followed_accounts = [e for e in user_exposure if e['following'] == 'TRUE' and e['hometimeline'] == 'FALSE']
+    # Extract two target_usernames elements that are not in twitter_handles and their corresponding name_with_handle
+    not_in_user_exposure_handles = [username for username in inventory_sorted["twitter_handle"].tolist() if
+                                    username not in twitter_handles][:2]
+    not_in_user_exposure_names = [handle_to_name_with_handle[handle] for handle in not_in_user_exposure_handles]
+    other_account1_name = not_in_user_exposure_names[0]
+    other_account2_name = not_in_user_exposure_names[1]
+
+    # Modify the sorting and selection to use name_with_handle
+    followed_accounts = [e for e in user_exposure if e['following'] and not e['hometimeline']]
     followed_accounts_sorted = sorted(followed_accounts, key=lambda x: int(x['followers']), reverse=True)
+    followed_accounts_sorted_names = [handle_to_name_with_handle[e['twitter_handle']] for e in followed_accounts_sorted
+                                      if e['twitter_handle'] in handle_to_name_with_handle]
 
-    # Following == FALSE & Hometimeline == TRUE
-    hometimeline_accounts = [e for e in user_exposure if e['following'] == 'FALSE' and e['hometimeline'] == 'TRUE']
+    hometimeline_accounts = [e for e in user_exposure if not e['following'] and e['hometimeline']]
     hometimeline_accounts_sorted = sorted(hometimeline_accounts, key=lambda x: int(x['followers']), reverse=True)
+    hometimeline_accounts_sorted_names = [handle_to_name_with_handle[e['twitter_handle']] for e in
+                                          hometimeline_accounts_sorted if
+                                          e['twitter_handle'] in handle_to_name_with_handle]
 
-    followed_account1 = followed_accounts_sorted[0]['twitter_handle'] if followed_accounts_sorted else "0"
-    followed_account2 = followed_accounts_sorted[1]['twitter_handle'] if len(followed_accounts_sorted) > 1 else "0"
-    hometimeline_account1 = hometimeline_accounts_sorted[0]['twitter_handle'] if hometimeline_accounts_sorted else "0"
-    hometimeline_account2 = hometimeline_accounts_sorted[1]['twitter_handle'] if len(
-        hometimeline_accounts_sorted) > 1 else "0"
+    followed_account1_name = followed_accounts_sorted_names[0] if followed_accounts_sorted_names else "0"
+    followed_account2_name = followed_accounts_sorted_names[1] if len(followed_accounts_sorted_names) > 1 else "0"
+    hometimeline_account1_name = hometimeline_accounts_sorted_names[0] if hometimeline_accounts_sorted_names else "0"
+    hometimeline_account2_name = hometimeline_accounts_sorted_names[1] if len(
+        hometimeline_accounts_sorted_names) > 1 else "0"
 
-    result = f"{followed_account1}$$${followed_account2}$$$" \
-             f"{hometimeline_account1}$$${hometimeline_account2}$$$" \
-             f"{other_account1}$$${other_account2}"
+    result = f"{followed_account1_name}$$${followed_account2_name}$$$" \
+             f"{hometimeline_account1_name}$$${hometimeline_account2_name}$$$" \
+             f"{other_account1_name}$$${other_account2_name}"
 
     return result
 
@@ -410,7 +412,7 @@ def store_group():
         sample_df = group_df.sample(frac=0.7, replace=False)
         muted_list.extend(sample_df.to_dict('records'))
     # If we have not reached the total samples, add more from the remaining data
-    while len(muted_list) < 342:    # change the numbers here
+    while len(muted_list) < 342:  # change the numbers here
         remaining_samples = 342 - len(muted_list)
         remaining_df = inventory.iloc[end_idx:]  # Remaining data after the last group
         extra_samples = remaining_df.sample(n=min(len(remaining_df), remaining_samples), replace=False)
@@ -590,7 +592,8 @@ def get_exposure():
         highest_followed_handle = highest_followed_account["twitter_handle"]
 
         # Select top 3 accounts from remaining muted accounts from muted_data, excluding the highest followed one
-        remaining_muted_accounts = [account for account in muted_data if account["twitter_handle"] != highest_followed_handle]
+        remaining_muted_accounts = [account for account in muted_data if
+                                    account["twitter_handle"] != highest_followed_handle]
 
         # Now select the top 3 followed accounts from the remaining muted accounts
         top_3_muted_handles = sorted(remaining_muted_accounts, key=lambda x: x["followers"], reverse=True)[:3]
@@ -604,7 +607,19 @@ def get_exposure():
         # Concatenate all selected handles
         all_handles = [highest_followed_handle] + top_3_muted_handles + non_muted_handles
         all_handles_str = [str(handle) for handle in all_handles]  # Ensure all handles are strings
-        return "$$$".join(all_handles_str)
+
+        # Load inventory with target user ids
+        inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")),
+                                dtype={"target_user_id": str, "twitter_handle": str, "name_with_handle": str})
+        inventory_sorted = inventory.sort_values(by="followers", ascending=False)
+
+        # Map twitter_handles to name_with_handles
+        handle_to_name_with_handle = dict(zip(inventory_sorted["twitter_handle"], inventory_sorted["name_with_handle"]))
+
+        # replace all_handles_str with name_with_handle
+        all_names_with_handle = [handle_to_name_with_handle.get(handle, "") for handle in all_handles_str]
+
+        return "$$$".join(all_names_with_handle)
     else:
         # Select top 4 followed accounts from muted accounts
         top_7_muted_accounts = sorted(muted_data, key=lambda x: x['followers'], reverse=True)[:7]
@@ -624,7 +639,8 @@ def get_exposure():
         if list(author_ids):  # check if author_ids is not empty (no hometimeline tweet)
             response = client.get_users(ids=list(author_ids), user_auth=True, user_fields='public_metrics')
             response['data'] = [user for user in response['data'] if user['username'] not in top_4_muted_handles]
-            highest_followed_nonmuted = max(response['data'], key=lambda x: x['public_metrics']['followers_count'])['username']
+            highest_followed_nonmuted = max(response['data'], key=lambda x: x['public_metrics']['followers_count'])[
+                'username']
         else:  # if there is no low quality accounts in hometimeline
             highest_followed_nonmuted = None
 
@@ -645,7 +661,18 @@ def get_exposure():
                 top_4_muted_handles + selected_non_muted_handles)
 
         all_handles_str = [str(handle) for handle in all_handles]  # Ensure all handles are strings
-        return "$$$".join(all_handles_str)
+        # Load inventory with target user ids
+        inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")),
+                                dtype={"target_user_id": str, "twitter_handle": str, "name_with_handle": str})
+        inventory_sorted = inventory.sort_values(by="followers", ascending=False)
+
+        # Map twitter_handles to name_with_handles
+        handle_to_name_with_handle = dict(zip(inventory_sorted["twitter_handle"], inventory_sorted["name_with_handle"]))
+
+        # replace all_handles_str with name_with_handle
+        all_names_with_handle = [handle_to_name_with_handle.get(handle, "") for handle in all_handles_str]
+
+        return "$$$".join(all_names_with_handle)
 
 
 @bp.after_request

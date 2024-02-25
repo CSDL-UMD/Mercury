@@ -12,6 +12,7 @@ import os
 import tweepy
 from datetime import datetime, timedelta
 from platformdirs import user_data_dir
+import requests
 
 from . import create_app
 from . import database
@@ -36,7 +37,7 @@ def collect_tweets_for_user(client, username, session_start, timing='pre', max_r
     # Calculate start_time and end_time based on timing
     session_start_dt = session_start
     if timing == 'pre':
-        start_time = (session_start_dt - timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        start_time = (session_start_dt - timedelta(days=60)).strftime('%Y-%m-%dT%H:%M:%SZ')
         end_time = (session_start_dt - timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
     elif timing == 'post':
         start_time = (session_start_dt + timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -50,7 +51,7 @@ def collect_tweets_for_user(client, username, session_start, timing='pre', max_r
     media_fields = "media_key,type,url,duration_ms,height,preview_image_url,public_metrics,width"
     expansions = "author_id,referenced_tweets.id,attachments.media_keys"
 
-    paginator = tweepy.Paginator(client.search_recent_tweets,
+    paginator = tweepy.Paginator(client.search_all_tweets,
                                  query=f"from:{username}",
                                  tweet_fields=tweet_fields,
                                  user_fields=user_fields,
@@ -62,6 +63,7 @@ def collect_tweets_for_user(client, username, session_start, timing='pre', max_r
     tweets = []
     try:
         for tweet in paginator.flatten(limit=max_results):
+            time.sleep(1)  # Rate limit: 1 request/second
             tweet_data = tweet.data if hasattr(tweet, 'data') else tweet
             tweets.append(tweet_data)
             time.sleep(1)  # Rate limit: 1 request/second
@@ -85,17 +87,21 @@ def collect_tweets(user_id_list, timing='pre'):
     For each chunk, this function collects and saves engagements of each user.
     Once iterations for a chunk is finished, it sleeps for 15 minutes; then resumes for the next chunk.
     """
-    client = tweepy.Client(bearer_token, return_type=dict, wait_on_rate_limit=True)
+    client = tweepy.Client(bearer_token, return_type=dict)
+
     directory = os.path.join(data_dir, "engagements")
     if not os.path.exists(directory):
         logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
         os.mkdir(directory)
+
     for user_chunk in chunker(user_id_list, 300):
         for user_id in user_chunk:
             logging.info(f"Start collecting {timing}-treatment tweets of {user_id=}")
-            session_start = database.get_session_start(user_id)
+            # session_start = database.get_session_start(user_id)
+            session_start = datetime.now()
             response = client.get_user(id=user_id)
             username = response['data']['username']
+            time.sleep(1)
             tweets = collect_tweets_for_user(client, username, session_start)
 
             with open(os.path.join(directory, f"{timing}-treatment_tweets_{user_id}.json"), 'w') as outfile:
@@ -103,6 +109,67 @@ def collect_tweets(user_id_list, timing='pre'):
             logging.info(f"Done collecting {timing}-treatment tweets of {user_id=}")
         logging.info("Finished a chunk of 300 user_ids. Waiting for 15 minutes to respect rate limits...")
         time.sleep(900)  # 15-minute sleep after each chunk
+    logging.info(f"Finished collecting {timing}-treatment tweets for all users!")
+
+
+# Tweepy being too slow
+def collect_tweets_now(user_id_list, timing='pre'):
+    directory = os.path.join(data_dir, "engagements")
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+        logging.info(f"Created directory: {directory}")
+
+    for user_id in user_id_list:
+        logging.info(f"Collecting {timing}-treatment tweets for {user_id=}")
+
+        # Set session_start to current datetime for demonstration purposes
+        session_start = datetime.now()
+        if timing == 'pre':
+            start_time = (session_start - timedelta(days=60)).strftime('%Y-%m-%dT%H:%M:%SZ')
+            end_time = (session_start - timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        elif timing == 'post':
+            start_time = (session_start + timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+            end_time = (datetime.now() - timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        client = tweepy.Client(bearer_token, return_type=dict, wait_on_rate_limit=True)
+        response = client.get_user(id=user_id)
+        if 'data' in response:
+            username = response['data']['username']
+        else:
+            logging.error(f"No 'data' key for {user_id=}")
+            continue
+        # Create headers
+        headers = {"Authorization": f"Bearer {bearer_token}"}
+
+        # Create URL and parameters
+        search_url = f"https://api.twitter.com/2/tweets/search/all"
+        query_params = {
+            'query': f'from:{username}',
+            'tweet.fields': 'attachments,author_id,conversation_id,created_at,entities,in_reply_to_user_id,lang,public_metrics,referenced_tweets,reply_settings',
+            'user.fields': 'id,name,username,created_at,description,entities,location,pinned_tweet_id,profile_image_url,protected,public_metrics,url,verified',
+            'media.fields': 'media_key,type,url,duration_ms,height,preview_image_url,public_metrics,width',
+            'expansions': 'author_id,referenced_tweets.id,attachments.media_keys',
+            'start_time': start_time,
+            'end_time': end_time,
+            'max_results': 300  # Adjust
+        }
+
+        response = requests.get(search_url, headers=headers, params=query_params)
+        if response.status_code != 200:
+            raise Exception(f"HTTP Error: {response.status_code} - {response.text}")
+        time.sleep(1)
+        tweets = response.json().get('data', [])
+
+        # Save tweets to file
+        directory = os.path.join(data_dir, "engagements")
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
+        file_path = os.path.join(directory, f"{timing}-treatment_tweets_{user_id}.json")
+        with open(file_path, 'w') as outfile:
+            json.dump(tweets, outfile, indent=4)
+            logging.info(f"Saved {timing} tweets for user: {user_id} to {file_path}")
+
     logging.info(f"Finished collecting {timing}-treatment tweets for all users!")
 
 
@@ -183,8 +250,7 @@ def main():
     app = create_app()
     with app.app_context():
         user_ids = database.get_eligible_users()
-        collect_tweets(user_ids, timing='pre')
-        # collect_tweets(user_ids, timing='post')
+        collect_tweets_now(user_id_list=user_ids, timing='pre')
         collect_likes(user_ids)
 
 

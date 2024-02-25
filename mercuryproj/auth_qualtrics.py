@@ -1,17 +1,16 @@
 import time
 from importlib.resources import files
+
 from requests_oauthlib import OAuth1Session
+
 import json
 import logging
 import os
 import pandas as pd
-import random
 import tweepy
 from datetime import datetime
 from flask import abort, request, Blueprint
-from flask_cors import cross_origin
 from platformdirs import user_data_dir
-
 from . import database
 from .configuration import configuration
 

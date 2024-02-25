@@ -242,7 +242,7 @@ def collect_likes(user_id_list):
                 logging.error(f"An error occurred while collecting likes for {user_id=}: {e}")
             except Exception as e:
                 logging.error(f"An unexpected error occurred while collecting likes for {user_id=}: {e}")
-    logging.info(f"Collecting likes finished for all users!")
+    logging.info(f"Collecting likes finished!")
 
 
 def main():

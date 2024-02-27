@@ -377,9 +377,6 @@ def store_group():
     In the end of the Wave 2 survey, this endpoint is called.
     This function stores each participant's randomly assigned group in DB
     along with the current timestamp.
-
-    Then, for each participant, we randomly sample accounts that should be (in real or counterfactually) muted.
-    Then, we store sampled target accounts (for muting) as a separate file for each user_id.
     """
     user_id = request.args.get("user_id").strip()
     randomized_group = request.args.get("group").strip()
@@ -394,6 +391,17 @@ def store_group():
         "session_start": current_timestamp
     }
     database.store_randomized_group(**insert_group_payload)
+
+
+@bp.route('/random70_mute', methods=['GET', 'POST'])
+def random70_mute():
+    """
+    In the end of the Wave 2 survey, this endpoint is called.
+    For each participant, we randomly sample accounts that should be (in real or counterfactually) muted.
+    Then, we store sampled target accounts (for muting) as a separate file for each user_id.
+    """
+    user_id = request.args.get("user_id").strip()
+    randomized_group = request.args.get("group").strip()
 
     # retrieve low quality accounts inventory
     inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")))

@@ -686,6 +686,6 @@ def get_exposure():
 
 @bp.after_request
 def add_headers(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Origin', survey_url)
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     return response

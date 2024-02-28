@@ -322,7 +322,7 @@ def muting_relationship_check():
         directory = os.path.join(data_dir, "muting_job", "muted_accounts")
         if not os.path.exists(directory):
             logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-            os.mkdir(directory)
+            os.makedirs(directory, exist_ok=True)
         with open(os.path.join(directory, f"muted_accounts_for_{user_id}.json"), 'r') as outfile:
             data = json.load(outfile)
 
@@ -355,7 +355,9 @@ def muting_relationship_check():
                 continue
 
         directory = os.path.join(data_dir, "muting_job", "compliance")
-        os.makedirs(directory, exist_ok=True)
+        if not os.path.exists(directory):
+            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+            os.makedirs(directory, exist_ok=True)
         time_day = str(datetime.now().date())
         with open(os.path.join(directory, f"{user_id}_{time_day}.json"), 'w', encoding='utf-8') as file:
             json.dump(all_data, file, ensure_ascii=False, indent=4)

@@ -40,7 +40,7 @@ def process_user_id(user_id):
     directory = f"{data_dir}/headlines_user"
     if not os.path.exists(directory):
         logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-        os.makedirs(directory)
+        os.makedirs(directory, exist_ok=True)
     filepath = os.path.join(directory, f"data_{user_id}.json")
     # Check if user data already exists
     if os.path.exists(filepath):
@@ -252,7 +252,7 @@ def randomize_headline():
     directory = f"{data_dir}/headlines_user"
     if not os.path.exists(directory):
         logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-        os.makedirs(directory)
+        os.makedirs(directory, exist_ok=True)
     # Save the result to a JSON file per user:
     with open(os.path.join(directory, f"data_{user_id}.json"), 'w') as f:
         f.write(json.dumps(result_dict, indent=4))
@@ -271,7 +271,7 @@ def get_sampled_headlines():
     directory = f"{data_dir}/headlines_user"
     if not os.path.exists(directory):
         logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-        os.makedirs(directory)
+        os.makedirs(directory, exist_ok=True)
     file_path = os.path.join(directory, f"data_{user_id}.json")
     with open(file_path.format(user_id), 'r') as f:
         data = json.load(f)
@@ -430,7 +430,7 @@ def random70_mute():
     directory = f"{data_dir}/muting_job/muted_accounts"
     if not os.path.exists(directory):
         logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-        os.makedirs(directory)
+        os.makedirs(directory, exist_ok=True)
     # Save the result to a JSON file per user:
     with open(os.path.join(directory, f"muted_accounts_for_{user_id}.json"), 'w') as f:
         f.write(json.dumps(muted_list, indent=4))
@@ -558,7 +558,7 @@ def get_exposure():
     directory = f"{data_dir}/muting_job/muted_accounts"
     if not os.path.exists(directory):
         logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-        os.makedirs(directory)
+        os.makedirs(directory, exist_ok=True)
     muted_accounts_file = os.path.join(directory, f"muted_accounts_for_{user_id}.json")
     with open(muted_accounts_file, 'r') as file:
         muted_data = json.load(file)
@@ -566,7 +566,7 @@ def get_exposure():
     directory = f"{data_dir}/eligibility/hometimeline_match"
     if not os.path.exists(directory):
         logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-        os.makedirs(directory)
+        os.makedirs(directory, exist_ok=True)
     hometimeline_match_file = os.path.join(directory, f"match_for_{user_id}.json")
     author_ids = []
     matched_accounts = []

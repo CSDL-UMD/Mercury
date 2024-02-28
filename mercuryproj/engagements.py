@@ -123,12 +123,12 @@ def collect_tweets_now(user_id_list, timing='pre'):
         logging.info(f"Collecting {timing}-treatment tweets for {user_id=}")
 
         # Set session_start to current datetime for demonstration purposes
-        session_start = datetime.now()
+        session_start = database.get_session_start(user_id)
         if timing == 'pre':
             start_time = (session_start - timedelta(days=60)).strftime('%Y-%m-%dT%H:%M:%SZ')
             end_time = (session_start - timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
         elif timing == 'post':
-            start_time = (session_start + timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+            start_time = (session_start + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
             end_time = (datetime.now() - timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
 
         client = tweepy.Client(bearer_token, return_type=dict, wait_on_rate_limit=True)
@@ -228,7 +228,7 @@ def collect_likes(user_id_list):
             os.mkdir(directory)
 
         # Open the file for writing likes data
-        with open(os.path.join(directory, f"likes_{user_id}.json"), 'a') as outfile:
+        with open(os.path.join(directory, f"post-likes_{user_id}.json"), 'a') as outfile:
             arr = []
             try:
                 for response in paginator.flatten(limit=300):
@@ -245,13 +245,83 @@ def collect_likes(user_id_list):
     logging.info(f"Collecting likes finished!")
 
 
+def reverse_chron(user_ids):
+    """
+    reverse_chron(user_id): performs reverse chronological call on the user,
+    retrieving up to 400 tweets from their home timeline.
+    Whatever tweets have been collected will then be dumped in the form of an array
+    into the user's respective JSON file.
+    """
+    logging.info(f'Start collecting reverse chron home timeline')
+
+    for user_id in user_ids:
+        logging.info(f'Collecting reverse chronological home timeline for {user_id=}.')
+        response = database.get_access_token(user_id)
+        access_token_response = response.get_json()
+
+        if 'error' in access_token_response:
+            logging.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
+            continue
+
+        # Store the user's tokens
+        access_token = access_token_response['access_token']
+        access_token_secret = access_token_response['access_token_secret']
+
+        # initialize tweepy client
+        try:
+            client = tweepy.Client(
+                consumer_key=cred['key'],
+                consumer_secret=cred['key_secret'],
+                access_token=access_token,
+                access_token_secret=access_token_secret,
+                return_type=dict,
+                wait_on_rate_limit=True
+            )
+        except Exception as e:
+            logging.error(f'Problem w/ making tweepy client for {user_id=}: {e}')
+            continue
+
+        tweet_fields = "attachments,author_id,conversation_id,created_at,entities,in_reply_to_user_id,lang,public_metrics,referenced_tweets,reply_settings"
+        user_fields = "id,name,username,created_at,description,entities,location,pinned_tweet_id,profile_image_url,protected,public_metrics,url,verified"
+        media_fields = "media_key,type,url,duration_ms,height,preview_image_url,public_metrics,width"
+        expansions = "author_id,referenced_tweets.id,attachments.media_keys"
+
+        paginator = tweepy.Paginator(client.get_home_timeline,
+                                     limit=4,
+                                     tweet_fields=tweet_fields,
+                                     user_fields=user_fields,
+                                     media_fields=media_fields,
+                                     expansions=expansions,
+                                     max_results=100)
+        directory = os.path.join(data_dir, "reverse-chron-data")
+        if not os.path.exists(directory):
+            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+            os.makedirs(directory, exist_ok=True)
+        with open(os.path.join(directory, f"post-reversechron-data-{user_id}.json"), 'a') as outfile:
+            arr = []
+            try:
+                for response in paginator.flatten(limit=400):
+                    if len(arr) <= 400:
+                        arr.append(response)
+                    else:
+                        break
+                json.dump(arr, outfile, indent=4)
+            except tweepy.TweepyException as e:
+                logging.error(f"An error occurred while reverse-chron for {user_id=}: {e}")
+            except Exception as e:
+                logging.error(f"An unexpected error occurred for {user_id=}: {e}")
+        logging.info(f'Reverse-chron job for {user_id=} done!')
+    logging.info(f'End collecting reverse chron home timeline')
+
+
 def main():
     logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
         user_ids = database.get_eligible_users()
-        collect_tweets_now(user_id_list=user_ids, timing='pre')
+        collect_tweets_now(user_id_list=user_ids, timing='post')
         collect_likes(user_ids)
+        reverse_chron(user_ids)
 
 
 if __name__ == "__main__":

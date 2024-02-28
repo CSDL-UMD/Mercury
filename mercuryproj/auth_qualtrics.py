@@ -40,7 +40,7 @@ def process_user_id(user_id):
     directory = f"{data_dir}/headlines_user"
     if not os.path.exists(directory):
         logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-        os.mkdir(directory)
+        os.makedirs(directory)
     filepath = os.path.join(directory, f"data_{user_id}.json")
     # Check if user data already exists
     if os.path.exists(filepath):
@@ -252,7 +252,7 @@ def randomize_headline():
     directory = f"{data_dir}/headlines_user"
     if not os.path.exists(directory):
         logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-        os.mkdir(directory)
+        os.makedirs(directory)
     # Save the result to a JSON file per user:
     with open(os.path.join(directory, f"data_{user_id}.json"), 'w') as f:
         f.write(json.dumps(result_dict, indent=4))
@@ -271,7 +271,7 @@ def get_sampled_headlines():
     directory = f"{data_dir}/headlines_user"
     if not os.path.exists(directory):
         logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-        os.mkdir(directory)
+        os.makedirs(directory)
     file_path = os.path.join(directory, f"data_{user_id}.json")
     with open(file_path.format(user_id), 'r') as f:
         data = json.load(f)
@@ -391,6 +391,7 @@ def store_group():
         "session_start": current_timestamp
     }
     database.store_randomized_group(**insert_group_payload)
+    return "DONE!"
 
 
 @bp.route('/random70_mute', methods=['GET', 'POST'])
@@ -429,7 +430,7 @@ def random70_mute():
     directory = f"{data_dir}/muting_job/muted_accounts"
     if not os.path.exists(directory):
         logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-        os.mkdir(directory)
+        os.makedirs(directory)
     # Save the result to a JSON file per user:
     with open(os.path.join(directory, f"muted_accounts_for_{user_id}.json"), 'w') as f:
         f.write(json.dumps(muted_list, indent=4))
@@ -557,7 +558,7 @@ def get_exposure():
     directory = f"{data_dir}/muting_job/muted_accounts"
     if not os.path.exists(directory):
         logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-        os.mkdir(directory)
+        os.makedirs(directory)
     muted_accounts_file = os.path.join(directory, f"muted_accounts_for_{user_id}.json")
     with open(muted_accounts_file, 'r') as file:
         muted_data = json.load(file)
@@ -565,7 +566,7 @@ def get_exposure():
     directory = f"{data_dir}/eligibility/hometimeline_match"
     if not os.path.exists(directory):
         logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-        os.mkdir(directory)
+        os.makedirs(directory)
     hometimeline_match_file = os.path.join(directory, f"match_for_{user_id}.json")
     author_ids = []
     matched_accounts = []
@@ -685,6 +686,6 @@ def get_exposure():
 
 @bp.after_request
 def add_headers(response):
-    response.headers.add('Access-Control-Allow-Origin', survey_url)
+    response.headers.add('Access-Control-Allow-Origin', '*')
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     return response

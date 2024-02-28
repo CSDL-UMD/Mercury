@@ -28,8 +28,8 @@ def mute_compliance():
     # Retrieve compliance files
     directory = f"{data_dir}/muting_job/compliance"
     if not os.path.exists(directory):
-        logging.warning(f"Directory {directory} does not exist.")
-        return
+        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        os.makedirs(directory, exist_ok=True)
 
     # Extract unique user IDs and their latest file
     files = os.listdir(directory)

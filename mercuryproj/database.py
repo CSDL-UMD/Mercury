@@ -288,6 +288,20 @@ def store_mute_state(user_id, state):
     return jsonify(data=user_id)
 
 
+def get_mute_result(user_id, target_user_id):
+    connection = getdb()
+    cursor = connection.cursor()
+    # user_id와 target_user_id 쌍에 해당하는 mute_result 값을 조회
+    cursor.execute("SELECT mute_result FROM mute_result WHERE user_id=%s AND target_user_id=%s;", (user_id, target_user_id))
+    result = cursor.fetchone()
+    cursor.close()
+    connection.commit()
+    if result is None:
+        return None
+    else:
+        return result[0]
+
+
 def get_mute_state():
     # Connect to the database and fetch state for all users where state is "New"
     connection = getdb()

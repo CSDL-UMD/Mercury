@@ -70,6 +70,13 @@ def mute_users_in_chunks(user_id, target_user_ids):
     for i in range(0, len(target_user_ids), chunk_size):
         chunk = target_user_ids[i:i + chunk_size]
         for target_user_id in chunk:
+            user_id = str(user_id)
+            target_user_id = str(target_user_id)
+            mute_result = database.get_mute_result(user_id, target_user_id)
+
+            if mute_result == 'True':
+                logging.info(f"Already muted {target_user_id} for {user_id=}, skipping.")
+                continue
             try:
                 response = client.mute(target_user_id=target_user_id)
                 success_mute_status = str(response['data']['muting'])
@@ -85,8 +92,8 @@ def mute_users_in_chunks(user_id, target_user_ids):
                 except Exception as e:
                     logging.error(f"Failed to store mute result for {user_id=} muting {target_user_id=}: {e}")
 
-        logging.info(f"Chunk processed, waiting for {wait_time / 60} minutes to respect rate limit.")
-        time.sleep(wait_time)  # Wait for 15 minutes before processing the next chunk
+        # logging.info(f"Chunk processed, waiting for {wait_time / 60} minutes to respect rate limit.")
+        # time.sleep(wait_time)  # Wait for 15 minutes before processing the next chunk
 
 
 def main():

@@ -151,7 +151,9 @@ def dm1():
     for user_id in user_list:
         # Get each user's randomized group info
         response = database.get_randomized_group(user_id=user_id)
-        if response == "media_literacy":
+        if response == "drop" or response == "muting_treatment2_drop":
+            continue
+        elif response == "media_literacy":
             # If the user is in media_literacy group, send dm1_text
             text = dm1_text
             dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
@@ -192,7 +194,7 @@ def dm1():
 
 def dm2():
     user_info_list = database.get_dm1()
-    logging.info(f'DM1 - Users from a week ago: {user_info_list=}')
+    logging.info(f'DM2 - Users from a week ago: {user_info_list=}')
     client_dm = tweepy.Client(
         consumer_key=cred['key'],
         consumer_secret=cred['key_secret'],
@@ -240,7 +242,7 @@ def dm2():
 def dm3():
     # Fetch the list of users and their text types who received a DM2 a week ago
     user_info_list = database.get_dm2()
-    logging.info(f'DM2 - Users from a week ago: {user_info_list=}')
+    logging.info(f'DM3 - Users from a week ago: {user_info_list=}')
     client_dm = tweepy.Client(
         consumer_key=cred['key'],
         consumer_secret=cred['key_secret'],

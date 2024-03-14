@@ -154,46 +154,53 @@ def dm1():
         if response == "drop" or response == "muting_treatment2_drop":
             continue
         elif response == "media_literacy":
-            # If the user is in media_literacy group, send dm1_text
-            text = dm1_text
-            dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
-            dm1_timestamp = datetime.now()  # Get current time
-            timestamp = dm1_timestamp.date()
-            dm_conversation_id = dm.data['dm_conversation_id']
-            dm_event_id = dm.data['dm_event_id']
-            text_type = "dm1_text"
-            # store in DB:
-            insert_dm1_payload = {
-                "user_id": user_id,
-                "conversation_id": dm_conversation_id,
-                "event_id": dm_event_id,
-                "timestamp": timestamp,
-                "text_type": text_type
-            }
-            database.store_dm1(**insert_dm1_payload)
+            try:
+                # If the user is in media_literacy group, send dm1_text
+                text = dm1_text
+                dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
+                dm1_timestamp = datetime.now()  # Get current time
+                timestamp = dm1_timestamp.date()
+                dm_conversation_id = dm.data['dm_conversation_id']
+                dm_event_id = dm.data['dm_event_id']
+                text_type = "dm1_text"
+                # store in DB:
+                insert_dm1_payload = {
+                    "user_id": user_id,
+                    "conversation_id": dm_conversation_id,
+                    "event_id": dm_event_id,
+                    "timestamp": timestamp,
+                    "text_type": text_type
+                }
+                database.store_dm1(**insert_dm1_payload)
+            except Exception as e:
+                logging.error(f'Error sending DM1 to {user_id=}: ' + str(e))
         else:
-            # If the user is not media_literacy group:
-            text = non_dm1_text
-            dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
-            dm1_timestamp = datetime.now()
-            timestamp = dm1_timestamp.date()
-            dm_conversation_id = dm.data['dm_conversation_id']
-            dm_event_id = dm.data['dm_event_id']
-            text_type = 'non_dm1_text'
-            # store in DB:
-            insert_dm1_payload = {
-                "user_id": user_id,
-                "conversation_id": dm_conversation_id,
-                "event_id": dm_event_id,
-                "timestamp": timestamp,
-                "text_type": text_type
-            }
-            database.store_dm1(**insert_dm1_payload)
-        logging.info(f'Sending the first DM1 to {user_list=} is done.')
+            try:
+                # If the user is not media_literacy group:
+                text = non_dm1_text
+                dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
+                dm1_timestamp = datetime.now()
+                timestamp = dm1_timestamp.date()
+                dm_conversation_id = dm.data['dm_conversation_id']
+                dm_event_id = dm.data['dm_event_id']
+                text_type = 'non_dm1_text'
+                # store in DB:
+                insert_dm1_payload = {
+                    "user_id": user_id,
+                    "conversation_id": dm_conversation_id,
+                    "event_id": dm_event_id,
+                    "timestamp": timestamp,
+                    "text_type": text_type
+                }
+                database.store_dm1(**insert_dm1_payload)
+            except Exception as e:
+                logging.error(f'Error sending DM1 to {user_id=}: ' + str(e))
+    logging.info(f'Sending the first DM1 to {user_list=} is done.')
 
 
 def dm2():
     user_info_list = database.get_dm1()
+    user_info_list = user_info_list[8:]
     logging.info(f'DM2 - Users from a week ago: {user_info_list=}')
     client_dm = tweepy.Client(
         consumer_key=cred['key'],
@@ -224,19 +231,21 @@ def dm2():
 
         # Send Direct Message
         logging.info(f'Sending DM2 for {user_id=}')
-        dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
-        dm_timestamp = datetime.now()
-        timestamp = dm_timestamp.date()
-
-        # Store DM info using a new store_dm2 function to be created in the database module
-        database.store_dm2(
-            user_id=user_id,
-            conversation_id=dm.data['dm_conversation_id'],
-            event_id=dm.data['dm_event_id'],
-            timestamp=timestamp,
-            text_type=text_type,
-            dm1_count=dm1_count
-        )
+        try:
+            dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
+            dm_timestamp = datetime.now()
+            timestamp = dm_timestamp.date()
+            # Store DM info using a new store_dm2 function to be created in the database module
+            database.store_dm2(
+                user_id=user_id,
+                conversation_id=dm.data['dm_conversation_id'],
+                event_id=dm.data['dm_event_id'],
+                timestamp=timestamp,
+                text_type=text_type,
+                dm1_count=dm1_count
+            )
+        except Exception as e:
+            logging.error(f'Error sending DM2 to {user_id=}: ' + str(e))
 
 
 def dm3():
@@ -271,19 +280,22 @@ def dm3():
 
         # Send Direct Message
         logging.info(f'Sending DM3 for {user_id=}')
-        dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
-        dm_timestamp = datetime.now()
-        timestamp = dm_timestamp.date()
+        try:
+            dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
+            dm_timestamp = datetime.now()
+            timestamp = dm_timestamp.date()
 
-        # Store DM info
-        database.store_dm3(
-            user_id=user_id,
-            conversation_id=dm.data['dm_conversation_id'],
-            event_id=dm.data['dm_event_id'],
-            timestamp=timestamp,
-            text_type=text_type,
-            dm2_count=dm2_count
-        )
+            # Store DM info
+            database.store_dm3(
+                user_id=user_id,
+                conversation_id=dm.data['dm_conversation_id'],
+                event_id=dm.data['dm_event_id'],
+                timestamp=timestamp,
+                text_type=text_type,
+                dm2_count=dm2_count
+            )
+        except Exception as e:
+            logging.error(f'Error sending DM3 to {user_id=}: ' + str(e))
 
 
 def muting_relationship_check():
@@ -372,8 +384,8 @@ def main():
     logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
-        muting_relationship_check()
-        dm1()
+        # muting_relationship_check()
+        # dm1()
         dm2()
         dm3()
 

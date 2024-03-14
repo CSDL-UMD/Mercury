@@ -463,6 +463,15 @@ def get_eligible_users():
     return user_ids
 
 
+def get_w2_users():
+    connection = getdb()
+    cursor = connection.cursor()
+    cursor.execute("SELECT user_id FROM randomized_group")
+    user_ids = [row[0] for row in cursor.fetchall()]
+    cursor.close()
+    # Return the list of user_ids
+    return user_ids
+
 def store_eligibility(user_id, criteria, passed, num_count):
     connection = getdb()
     cursor = connection.cursor()

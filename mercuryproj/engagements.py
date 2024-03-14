@@ -114,11 +114,6 @@ def collect_tweets(user_id_list, timing='pre'):
 
 # Tweepy being too slow
 def collect_tweets_now(user_id_list, timing='pre'):
-    directory = os.path.join(data_dir, "engagements")
-    if not os.path.exists(directory):
-        os.makedirs(directory)
-        logging.info(f"Created directory: {directory}")
-
     for user_id in user_id_list:
         logging.info(f"Collecting {timing}-treatment tweets for {user_id=}")
 
@@ -161,14 +156,15 @@ def collect_tweets_now(user_id_list, timing='pre'):
         tweets = response.json().get('data', [])
 
         # Save tweets to file
-        directory = os.path.join(data_dir, "engagements")
+        directory = os.path.join(data_dir, "engagements", "post-engagements")
         if not os.path.exists(directory):
-            os.makedirs(directory)
+            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+            os.makedirs(directory, exist_ok=True)
 
-        file_path = os.path.join(directory, f"{timing}-treatment_tweets_{user_id}.json")
+        file_path = os.path.join(directory, f"{timing}-treatment_tweets_{user_id}_{end_time}.json")
         with open(file_path, 'w') as outfile:
             json.dump(tweets, outfile, indent=4)
-            logging.info(f"Saved {timing} tweets for user: {user_id} to {file_path}")
+            logging.info(f"Saved {timing}_1 tweets for user: {user_id} to {file_path}")
 
     logging.info(f"Finished collecting {timing}-treatment tweets for all users!")
 
@@ -222,10 +218,10 @@ def collect_likes(user_id_list):
                                      user_auth=True)
 
         # Set up the directory for storing results
-        directory = os.path.join(data_dir, "engagements")
+        directory = os.path.join(data_dir, "engagements", "post-likes")
         if not os.path.exists(directory):
             logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-            os.mkdir(directory)
+            os.makedirs(directory, exist_ok=True)
 
         # Open the file for writing likes data
         with open(os.path.join(directory, f"post-likes_{user_id}.json"), 'a') as outfile:
@@ -281,6 +277,10 @@ def reverse_chron(user_ids):
             logging.error(f'Problem w/ making tweepy client for {user_id=}: {e}')
             continue
 
+        session_start = database.get_session_start(user_id)
+        start_time = (session_start + timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+        end_time = (datetime.now() - timedelta(minutes=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+
         tweet_fields = "attachments,author_id,conversation_id,created_at,entities,in_reply_to_user_id,lang,public_metrics,referenced_tweets,reply_settings"
         user_fields = "id,name,username,created_at,description,entities,location,pinned_tweet_id,profile_image_url,protected,public_metrics,url,verified"
         media_fields = "media_key,type,url,duration_ms,height,preview_image_url,public_metrics,width"
@@ -292,12 +292,14 @@ def reverse_chron(user_ids):
                                      user_fields=user_fields,
                                      media_fields=media_fields,
                                      expansions=expansions,
+                                     start_time=start_time,
+                                     end_time=end_time,
                                      max_results=100)
-        directory = os.path.join(data_dir, "reverse-chron-data")
+        directory = os.path.join(data_dir, "engagements", "post-hometimeline")
         if not os.path.exists(directory):
             logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
             os.makedirs(directory, exist_ok=True)
-        with open(os.path.join(directory, f"post-reversechron-data-{user_id}.json"), 'a') as outfile:
+        with open(os.path.join(directory, f"post-hometimeline-{user_id}_{end_time}.json"), 'a') as outfile:
             arr = []
             try:
                 for response in paginator.flatten(limit=400):
@@ -318,7 +320,7 @@ def main():
     logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
-        user_ids = database.get_eligible_users()
+        user_ids = database.get_w2_users()
         collect_tweets_now(user_id_list=user_ids, timing='post')
         collect_likes(user_ids)
         reverse_chron(user_ids)

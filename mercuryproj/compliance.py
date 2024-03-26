@@ -200,7 +200,6 @@ def dm1():
 
 def dm2():
     user_info_list = database.get_dm1()
-    user_info_list = user_info_list[8:]
     logging.info(f'DM2 - Users from a week ago: {user_info_list=}')
     client_dm = tweepy.Client(
         consumer_key=cred['key'],
@@ -384,7 +383,7 @@ def main():
     logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
-        # muting_relationship_check()
+        muting_relationship_check()
         # dm1()
         dm2()
         dm3()

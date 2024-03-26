@@ -404,7 +404,7 @@ def store_dm3(user_id, conversation_id, event_id, timestamp, text_type, dm2_coun
     connection = getdb()
     cursor = connection.cursor()
     cursor.execute(sql_insert, (user_id, conversation_id, event_id, timestamp, text_type, dm2_count))
-    logging.info(f"DM2 status inserted successfully for {user_id=}")
+    logging.info(f"DM3 status inserted successfully for {user_id=}")
     cursor.close()
     connection.commit()
 

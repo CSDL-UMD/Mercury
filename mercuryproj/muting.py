@@ -115,7 +115,7 @@ def main():
 
         for user_id in mute_users:
             database.store_mute_state(user_id=user_id, state="Done")
-            logging.info(f"Unmuting job for {user_id=} is done!")
+            logging.info(f"Muting job for {user_id=} is done!")
 
 
 if __name__ == "__main__":

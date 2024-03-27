@@ -20,7 +20,7 @@ if not os.path.exists(data_dir):
     os.mkdir(data_dir)
 
 
-def get_new_users():
+def get_mute_users():
     # Getting newly updated users for muting
     users = database.get_mute_state()
     all_users_state = users.get("users_state", [])
@@ -42,69 +42,78 @@ def get_muting_list_for_user(user_id):
     return target_user_ids
 
 
-def mute_users_in_chunks(user_id, target_user_ids):
-    chunk_size = 50  # Rate limit consideration
+def chunk_target_user_ids(target_user_ids, chunk_size=5):
+    # Due to rate limit, chunk target_user_ids in 5
+    return [target_user_ids[i:i + chunk_size] for i in range(0, len(target_user_ids), chunk_size)]
+
+
+def process_user_chunks(user_id, chunked_target_user_ids):
     wait_time = 15 * 60  # 15 minutes wait time in seconds
+    try:
+        # Store the user's tokens
+        response = database.get_access_token(user_id)
+        access_token_response = response.get_json()
 
-    # Store the user's tokens
-    response = database.get_access_token(user_id)
-    access_token_response = response.get_json()
+        if 'error' in access_token_response:
+            raise Exception(access_token_response['error'])
+        access_token = access_token_response['access_token']
+        access_token_secret = access_token_response['access_token_secret']
 
-    if 'error' in access_token_response:
-        raise Exception(access_token_response['error'])
+        # Make a tweepy client
+        client = tweepy.Client(
+            consumer_key=cred['key'],
+            consumer_secret=cred['key_secret'],
+            access_token=access_token,
+            access_token_secret=access_token_secret,
+            return_type=dict,
+            wait_on_rate_limit=True
+        )
 
-    access_token = access_token_response['access_token']
-    access_token_secret = access_token_response['access_token_secret']
-
-    # Make a tweepy client
-    client = tweepy.Client(
-        consumer_key=cred['key'],
-        consumer_secret=cred['key_secret'],
-        access_token=access_token,
-        access_token_secret=access_token_secret,
-        return_type=dict,
-        wait_on_rate_limit=True
-    )
-    database.store_mute_state(user_id=user_id, state="In Progress")
-
-    for i in range(0, len(target_user_ids), chunk_size):
-        chunk = target_user_ids[i:i + chunk_size]
-        for target_user_id in chunk:
-            user_id = str(user_id)
-            target_user_id = str(target_user_id)
-            mute_result = database.get_mute_result(user_id, target_user_id)
-
-            if mute_result == 'True':
-                logging.info(f"Already muted {target_user_id} for {user_id=}, skipping.")
-                continue
-            try:
-                response = client.mute(target_user_id=target_user_id)
-                success_mute_status = str(response['data']['muting'])
+        # mute each chunk
+        for chunk in chunked_target_user_ids:
+            for target_user_id in chunk:
                 try:
-                    database.store_mute_result(user_id, target_user_id, success_mute_status, datetime.now())
-                    logging.info(f"Successfully muted {target_user_id} for {user_id=}.")
+                    response = client.mute(target_user_id=target_user_id)
+                    success_mute_status = str(response['data']['muting'])
+                    try:
+                        database.store_mute_result(user_id, target_user_id, success_mute_status, datetime.now())
+                        logging.info(f"Successfully muted {target_user_id=} for {user_id=}.")
+                    except Exception as e:
+                        logging.error(f"Failed to store mute result for {user_id=} muting {target_user_id=}: {e}")
                 except Exception as e:
-                    logging.error(f"Failed to store mute result for {user_id=} muting {target_user_id=}: {e}")
-            except Exception as e:
-                logging.error(f"Error: {e} for {user_id=} muting {target_user_id=}")
-                try:
-                    database.store_mute_result(user_id, target_user_id, "Failed", datetime.now())
-                except Exception as e:
-                    logging.error(f"Failed to store mute result for {user_id=} muting {target_user_id=}: {e}")
+                    logging.error(f"Error: {e} for {user_id=} muting {target_user_id=}")
+                    try:
+                        database.store_mute_result(user_id, target_user_id, "Failed", datetime.now())
+                    except Exception as e:
+                        logging.error(f"Failed to store mute result for {user_id=} muting {target_user_id=}: {e}")
 
-        # logging.info(f"Chunk processed, waiting for {wait_time / 60} minutes to respect rate limit.")
-        # time.sleep(wait_time)  # Wait for 15 minutes before processing the next chunk
+        # Update state as 'In Progress'
+        database.store_mute_state(user_id=user_id, state="In Progress")
+    except Exception as e:
+        logging.error(f"Failed to process {user_id=} due to an error: {e}")
 
 
 def main():
     logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
-        new_users = get_new_users()
-        for user_id in new_users:
-            logging.info(f"Muting job for {user_id=} starts!")
-            target_user_ids = get_muting_list_for_user(user_id)
-            mute_users_in_chunks(user_id, target_user_ids)
+        mute_users = get_mute_users()
+        all_users_chunked_target_ids = {user_id: chunk_target_user_ids(get_muting_list_for_user(user_id))
+                                        for user_id in mute_users}
+
+        max_chunks = max((len(chunks) for chunks in all_users_chunked_target_ids.values()), default=0)
+        for chunk_index in range(max_chunks):
+            for user_id, chunks in all_users_chunked_target_ids.items():
+                if chunk_index < len(chunks):
+                    logging.info(f"Processing chunk {chunk_index+1} for {user_id=}")
+                    try:
+                        process_user_chunks(user_id, [chunks[chunk_index]])
+                    except Exception as e:
+                        logging.error(f"Error processing chunk for {user_id=}: {e}")
+            logging.info("Waiting 15 minutes to respect rate limits...")
+            time.sleep(15 * 60)
+
+        for user_id in mute_users:
             database.store_mute_state(user_id=user_id, state="Done")
             logging.info(f"Muting job for {user_id=} is done!")
 

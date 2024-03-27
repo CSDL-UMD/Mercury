@@ -399,7 +399,7 @@ def store_dm2(user_id, conversation_id, event_id, timestamp, text_type, dm1_coun
 
 
 def store_dm3(user_id, conversation_id, event_id, timestamp, text_type, dm2_count):
-    logging.info(f"Store DM2 for {user_id=}; {text_type=}")
+    logging.info(f"Store DM3 for {user_id=}; {text_type=}")
     sql_insert = """INSERT INTO dm3 (user_id, conversation_id, event_id, timestamp, text_type, dm2_count) VALUES(%s,%s,%s,%s,%s,%s);"""
     connection = getdb()
     cursor = connection.cursor()

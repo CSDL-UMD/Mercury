@@ -198,7 +198,7 @@ def collect_likes(user_id_list):
             access_token=access_token,
             access_token_secret=access_token_secret,
             return_type=dict,
-            wait_on_rate_limit=True
+            # wait_on_rate_limit=True
         )
 
         # Define fields and expansions for the request
@@ -271,7 +271,7 @@ def reverse_chron(user_ids):
                 access_token=access_token,
                 access_token_secret=access_token_secret,
                 return_type=dict,
-                wait_on_rate_limit=True
+                # wait_on_rate_limit=True
             )
         except Exception as e:
             logging.error(f'Problem w/ making tweepy client for {user_id=}: {e}')

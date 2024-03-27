@@ -407,6 +407,7 @@ def random70_mute():
     # retrieve low quality accounts inventory
     inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")))
     # cutoff (95%)
+    # reorder by number of follows !!!! - missed this terribly sorry
     reduced_inventory = inventory[:489]
     # order by exposure per Option 2
     reduced_inventory = reduced_inventory.sort_values(by='exposure', ascending=False)

@@ -317,8 +317,8 @@ def random70_mute():
         by=["followed_by", "total_engagement",  "exposure", "followers"],
         ascending=[False, False, False, False]
     )
-    # cutoff (95%) by `followed_by` (~443 accounts)
-    reduced_inventory = inventory_sorted[:442]
+    # cutoff (95%) by `followed_by` (~434 accounts)
+    reduced_inventory = inventory_sorted[:434]
 
     # order by exposure per Option 2 (change this!!)
     reordered_inventory = reduced_inventory.sort_values(
@@ -336,8 +336,8 @@ def random70_mute():
         sample_df = group_df.sample(frac=0.7, replace=False)
         muted_list.extend(sample_df.to_dict('records'))
     # If we have not reached the total samples, add more from the remaining data
-    while len(muted_list) < 310:  # change the numbers here
-        remaining_samples = 310 - len(muted_list)
+    while len(muted_list) < 304:  # change the numbers here (304 = 70% of 434)
+        remaining_samples = 304 - len(muted_list)
         remaining_df = inventory.iloc[end_idx:]  # Remaining data after the last group
         extra_samples = remaining_df.sample(n=min(len(remaining_df), remaining_samples), replace=False)
         muted_list.extend(extra_samples.to_dict('records'))

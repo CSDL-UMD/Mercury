@@ -1,14 +1,28 @@
 """
 * Eligibility check *
-Based on the Wave 1 survey result, prepare a list of user_id.
-(1) `save_user_info()`: check user information
-- (a) whether the user account is not too new: True if user account created before Oct 23rd 2023, else False
-- (b) store the number of accounts that the user is following
-    - save as `user_info.csv` with user_id, account created date, and other public metrics
-(2) 'get_muted_criteria()': True if not have already muted more than 30% of accounts in the inventory
-(3) `reverse_chron()`: Collect reverse chron home timeline (stored in /reverse-chron-data) and
-+ `home_timeline_match()`: True if collected reverse chron home timeline data includes any low-quality accounts
+This module is designed to collect user engagement data and evaluate eligibility based on several criteria.
+
+Functions:
+(1) `save_user_info()`: Collect and save user information.
+    - (a) Checks if the user account is older than a specified date (Nov 1, 2023).
+    - (b) Stores the number of accounts the user is following.
+    - Saves information in `user_info.csv` including user_id, account creation date, and other public metrics.
+
+(2) `relationship_check()`: Checks relationships between users and inventory accounts.
+    - Divides `user_ids` into chunks of 300 to respect rate limits.
+    - For each user, it checks if the user follows any low-quality accounts by evaluating their connections.
+
+Rate Limits:
+- For engagements, the script processes up to 300 users per chunk and pauses for 15 minutes to respect rate limits.
+- For relationship checks, each user can request up to 15 chunks of 100 target users each, staying within the user rate limit.
+
+File Management:
+- Collected user information and connection status data are saved in specific directories under `data_dir`.
+- Parsed data is stored in a separate directory for further analysis.
+- Eligibility results are saved and updated in the database.
 """
+
+import time
 from importlib.resources import files
 import json
 import os
@@ -40,8 +54,14 @@ target_user_ids = inventory["target_user_id"].tolist()
 target_usernames = inventory["twitter_handle"].tolist()
 
 
-def save_user_info(user_ids):
+def chunker(seq, size):
+    return (seq[pos:pos + size] for pos in range(0, len(seq), size))
+
+
+def save_user_info():
     logging.info(f'Start saving user info')
+    # Get w1 user_ids from yesterday
+    user_ids = database.get_w1_users()
     for user_id in user_ids:
         logging.info(f'Saving user info for {user_id=}.')
         response = database.get_access_token(user_id)
@@ -60,8 +80,7 @@ def save_user_info(user_ids):
                 consumer_secret=cred['key_secret'],
                 access_token=access_token,
                 access_token_secret=access_token_secret,
-                return_type=dict,
-                wait_on_rate_limit=True
+                return_type=dict
             )
         except Exception as e:
             logging.error(f'Problem w/ making tweepy client for {user_id=}: {e}')
@@ -71,7 +90,7 @@ def save_user_info(user_ids):
             user_fields = 'created_at,public_metrics'
             response = client.get_me(user_fields=user_fields)
         except Exception as e:
-            logging.error(f'Error in get_me() for {user_id}: {e}. Skipping to the next user.')
+            logging.error(f'Error in get_me() for {user_id=}: {e}. Skipping to the next user.')
             continue
 
         try:
@@ -101,338 +120,99 @@ def save_user_info(user_ids):
         with open(f"{directory}/user_info.csv", 'a') as f:
             writer_obj = writer(f)
             writer_obj.writerow(row)
-            f.close()
         logging.info(f'Saving user info for {user_id=} done!')
     logging.info(f'End saving user info')
 
 
-def get_muted_criteria(user_ids):
-    logging.info(f'Start getting muted criteria')
-    for user_id in user_ids:
-        logging.info(f'Getting muted accounts list for {user_id=}.')
-
-        # Get access token from DB via /get_access_token route
-        response = database.get_access_token(user_id)
-        access_token_response = response.get_json()
-
-        if 'error' in access_token_response:
-            logging.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
-            continue
-
-        # Store the user's tokens
-        access_token = access_token_response['access_token']
-        access_token_secret = access_token_response['access_token_secret']
-
-        # Make a tweepy client
-        client = tweepy.Client(
-            consumer_key=cred['key'],
-            consumer_secret=cred['key_secret'],
-            access_token=access_token,
-            access_token_secret=access_token_secret,
-            return_type=dict,
-            wait_on_rate_limit=True
-        )
-
-        # Attempt to retrieve the muted accounts
-        already_muted_list = []
-        try:
-            muted_response = client.get_muted()
-            if 'data' in muted_response and muted_response['meta']['result_count'] > 0:
-                for account in muted_response['data']:
-                    account_id = int(account['id'])
-                    if account_id in target_user_ids:
-                        already_muted_list.append(account_id)
-        except tweepy.TweepyException as e:
-            logging.error(f"An error occurred getting muted list for {user_id=}: {e}")
-        except Exception as e:
-            logging.error(f"An unexpected error occurred for {user_id=}: {e}")
-
-        num_muted = len(already_muted_list)
-        muted_dict = {"user_id": user_id, "already_muted": already_muted_list, "num_muted": num_muted}
-
-        # Set the directory where the files will be saved
-        directory = os.path.join(data_dir, "muting_job", "already_muted")
-        if not os.path.exists(directory):
-            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-            os.makedirs(directory, exist_ok=True)
-
-        # Save the result to a JSON file per user if there are already muted low quality account
-        if num_muted > 0:
-            with open(os.path.join(directory, f"already_muted_{user_id}.json"), 'w') as f:
-                json.dump(muted_dict, f, indent=4)
-
-        # Decide pass_value based on num_muted
-        pass_value = True if num_muted <= 94 else False
-        # Store eligibility check result:
-        database.store_eligibility(user_id, "already_muted", pass_value, num_muted)
-        logging.info(f'Getting muted accounts list for {user_id=} done!')
-    logging.info(f'End getting muted criteria')
-
-
-def reverse_chron(user_ids):
-    """
-    reverse_chron(user_id): performs reverse chronological call on the user,
-    retrieving up to 400 tweets from their home timeline.
-    Whatever tweets have been collected will then be dumped in the form of an array
-    into the user's respective JSON file.
-    """
-    logging.info(f'Start collecting reverse chron home timeline')
-
-    for user_id in user_ids:
-        logging.info(f'Collecting reverse chronological home timeline for {user_id=}.')
-        response = database.get_access_token(user_id)
-        access_token_response = response.get_json()
-
-        if 'error' in access_token_response:
-            logging.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
-            continue
-
-        # Store the user's tokens
-        access_token = access_token_response['access_token']
-        access_token_secret = access_token_response['access_token_secret']
-
-        # initialize tweepy client
-        try:
-            client = tweepy.Client(
-                consumer_key=cred['key'],
-                consumer_secret=cred['key_secret'],
-                access_token=access_token,
-                access_token_secret=access_token_secret,
-                return_type=dict,
-                wait_on_rate_limit=True
-            )
-        except Exception as e:
-            logging.error(f'Problem w/ making tweepy client for {user_id=}: {e}')
-            continue
-
-        tweet_fields = "attachments,author_id,conversation_id,created_at,entities,in_reply_to_user_id,lang,public_metrics,referenced_tweets,reply_settings"
-        user_fields = "id,name,username,created_at,description,entities,location,pinned_tweet_id,profile_image_url,protected,public_metrics,url,verified"
-        media_fields = "media_key,type,url,duration_ms,height,preview_image_url,public_metrics,width"
-        expansions = "author_id,referenced_tweets.id,attachments.media_keys"
-
-        paginator = tweepy.Paginator(client.get_home_timeline,
-                                     limit=4,
-                                     tweet_fields=tweet_fields,
-                                     user_fields=user_fields,
-                                     media_fields=media_fields,
-                                     expansions=expansions,
-                                     max_results=100)
-        directory = os.path.join(data_dir, "reverse-chron-data")
-        if not os.path.exists(directory):
-            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-            os.makedirs(directory, exist_ok=True)
-        with open(os.path.join(directory, f"reversechron-data-{user_id}.json"), 'a') as outfile:
-            arr = []
-            try:
-                for response in paginator.flatten(limit=400):
-                    if len(arr) <= 400:
-                        arr.append(response)
-                    else:
-                        break
-                json.dump(arr, outfile, indent=4)
-            except tweepy.TweepyException as e:
-                logging.error(f"An error occurred while reverse-chron for {user_id=}: {e}")
-            except Exception as e:
-                logging.error(f"An unexpected error occurred for {user_id=}: {e}")
-        logging.info(f'Reverse-chron job for {user_id=} done!')
-    logging.info(f'End collecting reverse chron home timeline')
-
-
-def home_timeline_match(user_ids):
-    """
-    After reverse_chron job is done
-    """
-
-    def extract_twitter_handle(url):
-        """
-        Extract handles from urls for quote
-        """
-        if 'status' in url:
-            parts = url.split('/')
-            try:
-                handle_index = parts.index('status') - 1
-                return parts[handle_index]
-            except ValueError:
-                return None
-        return None
-
-    logging.info('Start searching for low-quality accounts in home timeline data')
-
-    for user_id in user_ids:
-        logging.info(f'Looking for low-quality accounts in home timeline data for {user_id=}.')
-
-        # Initialize empty list for matching target_user_ids
-        hometimeline_match = []
-
-        # Load JSON data
-        directory = os.path.join(data_dir, "reverse-chron-data")
-        if not os.path.exists(directory):
-            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-            os.makedirs(directory, exist_ok=True)
-
-        file_path = os.path.join(directory, f"reversechron-data-{user_id}.json")
-        if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-            with open(file_path, 'r') as outfile:
-                data = json.load(outfile)
-
-                for item in data:
-                    author_id = item['author_id']
-                    is_direct_match = str(author_id) in (str(target_user_id) for target_user_id in
-                                                         inventory['target_user_id'])
-
-                    if is_direct_match:
-                        hometimeline_match.append({"user_id": str(author_id), "match_type": "direct"})
-                    else:
-                        # Indirect matching for retweeted tweets
-                        if "referenced_tweets" in item:
-                            for ref_tweet in item['referenced_tweets']:
-                                if ref_tweet['type'] == "retweeted" and 'mentions' in item['entities']:
-                                    for mention in item['entities']['mentions']:
-                                        if str(mention['id']) in (str(target_user_id) for target_user_id in
-                                                                  inventory['target_user_id']):
-                                            hometimeline_match.append(
-                                                {"user_id": str(mention['id']), "match_type": "retweeted"})
-
-                        # Indirect matching for quoted tweets
-                        if 'urls' in item.get('entities', {}):
-                            for url_info in item['entities']['urls']:
-                                expanded_url = url_info.get('expanded_url', '')
-                                twitter_handle = extract_twitter_handle(expanded_url)
-                                if twitter_handle in target_usernames:
-                                    try:
-                                        # Find the index of the twitter_handle in the target_usernames list
-                                        handle_index = target_usernames.index(twitter_handle)
-                                        # Use the same index to retrieve the corresponding target_user_id from the target_user_ids
-                                        matched_target_user_id = target_user_ids[handle_index]
-                                        hometimeline_match.append(
-                                            {"user_id": str(matched_target_user_id), "match_type": "quoted"})
-                                    except ValueError:
-                                        # Handle the case where the twitter_handle is not found in the target_usernames list
-                                        logging.error(f"twitter_handle not found in target_usernames: {twitter_handle}")
-                                    except IndexError:
-                                        # Handle the case where the index is out of bounds for the target_user_ids list
-                                        logging.error(
-                                            f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
-
-                pass_value = True if hometimeline_match else False
-                count = len(hometimeline_match)
-                database.store_eligibility(user_id, "hometimeline", pass_value, count)
-
-                # Saving the hometimeline_match information for each user_id
-                directory = os.path.join(data_dir, "eligibility", "hometimeline_match")
-                os.makedirs(directory, exist_ok=True)
-
-                with open(os.path.join(directory, f"match_for_{user_id}.json"), "w") as match_file:
-                    json.dump({user_id: hometimeline_match}, match_file)
-                logging.info(f'Home timeline match for {user_id=} done!')
-        else:
-            logging.warning(f"JSON file {file_path} is either empty or does not exist for user {user_id}. Skipping.")
-            # Store eligibility as False and count as 0 since the timeline data is empty
-            database.store_eligibility(user_id, "hometimeline", False, 0)
-    logging.info('End searching for low-quality accounts in home timeline data')
-
-
-def relationship_check(user_ids):
+def relationship_check():
     logging.info(f'Start checking the relationships between users and inventory accounts')
+    # get w1 users from yesterday
+    user_ids = database.get_w1_users()
 
     target_user_list = list(map(str, target_user_ids))
-    target_user_list.append('1691551574550519808')  # adding MercuryUMD to ensure that they are still following us
     # Considering endpoint limit: maximum 100, we chunk target_user_list
     chunk_size = 100
-    chunks = [target_user_list[i:i + chunk_size] for i in range(0, len(target_user_list), chunk_size)]
+    target_chunks = [target_user_list[i:i + chunk_size] for i in range(0, len(target_user_list), chunk_size)]
 
-    for user_id in user_ids:
-        response = database.get_access_token(user_id)
-        access_token_response = response.get_json()
+    # Chunk user_id_list into chunks of 300
+    user_chunks = list(chunker(user_ids, 300))
+    total_chunks = len(user_chunks)
 
-        if 'error' in access_token_response:
-            logging.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
-            continue
+    for chunk_index, user_chunk in enumerate(user_chunks, 1):
+        for user_id in user_chunk:
+            response = database.get_access_token(user_id)
+            access_token_response = response.get_json()
 
-        # Store the user's tokens
-        access_token = access_token_response['access_token']
-        access_token_secret = access_token_response['access_token_secret']
-
-        # initialize OAuth
-        auth = OAuth1(
-            client_key=cred['key'],
-            client_secret=cred['key_secret'],
-            resource_owner_key=access_token,
-            resource_owner_secret=access_token_secret
-        )
-        url = 'https://api.twitter.com/2/users'
-
-        # List to save the results
-        all_data = []
-
-        for index, chunk in enumerate(chunks):
-            params = {
-                'ids': ','.join(chunk),
-                'user.fields': 'connection_status'
-            }
-
-            try:
-                response = requests.get(url, auth=auth, params=params)
-
-                if response.status_code == 200:
-                    users = response.json()
-                    all_data.extend(users['data'])
-                else:
-                    logging.error(f"{user_id=} error with status code {response.status_code} for chunk {index}")
-                    continue
-
-            except requests.exceptions.RequestException as e:
-                logging.error(f"Request failed for chunk {index}: {e}")
+            if 'error' in access_token_response:
+                logging.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
                 continue
 
-        directory = os.path.join(data_dir, "eligibility", "connection_status")
-        os.makedirs(directory, exist_ok=True)
-        with open(os.path.join(directory, f"Connection_status_{user_id}.json"), 'w', encoding='utf-8') as file:
-            json.dump(all_data, file, ensure_ascii=False, indent=4)
-        logging.info(f'Finished processing connection_status for {user_id=}')
+            # Store the user's tokens
+            access_token = access_token_response['access_token']
+            access_token_secret = access_token_response['access_token_secret']
+
+            # initialize OAuth
+            auth = OAuth1(
+                client_key=cred['key'],
+                client_secret=cred['key_secret'],
+                resource_owner_key=access_token,
+                resource_owner_secret=access_token_secret
+            )
+            url = 'https://api.twitter.com/2/users'
+
+            # List to save the results
+            all_data = []
+
+            for index, target_chunk in enumerate(target_chunks):
+                params = {
+                    'ids': ','.join(target_chunk),
+                    'user.fields': 'connection_status'
+                }
+
+                try:
+                    response = requests.get(url, auth=auth, params=params)
+
+                    if response.status_code == 200:
+                        users = response.json()
+                        all_data.extend(users['data'])
+                    else:
+                        logging.error(f"{user_id=} error with status code {response.status_code} for target_chunk {index}")
+                        continue
+
+                except requests.exceptions.RequestException as e:
+                    logging.error(f"Request failed for target_chunk {index}: {e}")
+                    continue
+
+            directory = os.path.join(data_dir, "eligibility", "connection_status")
+            os.makedirs(directory, exist_ok=True)
+            with open(os.path.join(directory, f"Connection_status_{user_id}.json"), 'w', encoding='utf-8') as file:
+                json.dump(all_data, file, ensure_ascii=False, indent=4)
+
+            # Check if the user follows at least one of the low quality accounts
+            following_count = sum(1 for entry in all_data if
+                                  'connection_status' in entry and 'following' in entry['connection_status'])
+            if following_count > 0:
+                database.store_eligibility(user_id, "following_LQ", True, following_count)
+            else:
+                database.store_eligibility(user_id, "following_LQ", False, 0)
+
+            logging.info(f'Finished processing connection_status for {user_id=}')
+
+        # After each chunk, wait for 15 minutes to respect the rate limit, but not after the last chunk
+        if chunk_index < total_chunks:
+            logging.info(f"Processed 300 users, sleeping for ~16 minutes to respect the rate limit.")
+            time.sleep(16 * 60)  # Sleep for 16 minutes
 
     logging.info(f'End checking relationships between users and inventory accounts')
-
-
-def update_eligibility_from_json():
-    logging.info(f"Iterate connection_status to update eligibility results")
-    folder_path = os.path.join(data_dir, 'eligibility', 'connection_status')
-
-    for filename in os.listdir(folder_path):
-        if filename.startswith("Connection_status_") and filename.endswith(".json"):
-            user_id = filename.split('_')[-1].split('.')[0]
-            logging.info(f'Processing for {user_id=}')
-            file_path = os.path.join(folder_path, filename)
-
-            with open(file_path, 'r') as file:
-                data = json.load(file)
-
-                if not data:
-                    continue
-                # Check if the user follows MercuryUMD
-                if data[-1]['username'] == 'MercuryUMD' and 'following' in data[-1].get('connection_status', []):
-                    database.store_eligibility(user_id, "following_us", True, "na")
-
-                # Check if the user follows at least one of the low quality accounts
-                following_count = sum(1 for entry in data[:-1] if
-                                      'connection_status' in entry and 'following' in entry['connection_status'])
-                if following_count > 0:
-                    database.store_eligibility(user_id, "following_NG", True, following_count)
-            logging.info(f'Ended for {user_id=}')
 
 
 def main():
     logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
-        user_ids = database.get_all_users()
-        save_user_info(user_ids)
-        get_muted_criteria(user_ids)
-        reverse_chron(user_ids)
-        home_timeline_match(user_ids)   # this should be run after reverse_chron() is done
-        relationship_check(user_ids)
-        update_eligibility_from_json()
- 
+        save_user_info()
+        relationship_check()
+
 
 if __name__ == "__main__":
     main()

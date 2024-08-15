@@ -171,65 +171,6 @@ def auth_screenname():
         return "An error occurred", 500
 
 
-@bp.route('/following', methods=['POST'])
-def following():
-    """
-    Wave 1
-    """
-    if "user_id" in request.args:
-        user_id = request.args.get("user_id").strip()
-    else:
-        abort(500, "No user_id specified. Aborting.")
-    logging.info(f"Following the study account for {user_id=}")
-    response = database.get_access_token(user_id)
-    access_token_response = response.get_json()
-
-    if 'error' in access_token_response:
-        raise Exception(access_token_response['error'])
-
-    # Store the user's tokens
-    access_token = access_token_response['access_token']
-    access_token_secret = access_token_response['access_token_secret']
-
-    # make a tweepy client
-    client = tweepy.Client(
-        consumer_key=cred['key'],
-        consumer_secret=cred['key_secret'],
-        access_token=access_token,
-        access_token_secret=access_token_secret,
-        return_type=dict)
-    # target_follow_id: Mercury study account!
-    target_follow_id = "1691551574550519808"
-    # Try the following
-    success = False
-    for attempt in range(3):  # Try up to 3 times
-        try:
-            response = client.follow_user(target_user_id=target_follow_id, user_auth=True)
-            success = response["data"]["following"]
-            logging.info(f"Following result: {success=} for {user_id=}")
-        except Exception as e:
-            logging.error(f"Error: {e}")
-            time.sleep(1000)
-        else:
-            # If no exception was raised in the try block, break the loop
-            break
-        # If an exception was raised, wait for 1 second before the next attempt
-    # If all attempts failed and success is still False, assign response to success.
-    if not success:
-        success = "Failed"
-    # log the day
-    timestamp = datetime.now().isoformat()
-    # store in DB:
-    insert_following_payload = {
-        "user_id": user_id,
-        "success": success,
-        "session_start": timestamp
-    }
-    database.store_following(**insert_following_payload)
-    response_message = "Successfully followed!"  # return this anyway to turn the page
-    return response_message
-
-
 @bp.route('/randomize_headline', methods=['GET', 'POST'])
 def randomize_headline():
     """
@@ -303,7 +244,7 @@ def get_sampled_headlines():
 @bp.route('/store_vsid', methods=['GET', 'POST'])
 def store_vsid():
     """
-    In the end of the Wave 1 survey, this endpoint is called.
+    In the Wave 1 survey, this endpoint is called.
     This function stores each participant's vsid in DB
     by finding corresponding user_id.
     """
@@ -315,60 +256,21 @@ def store_vsid():
         "user_id": user_id,
         "vsid": vsid,
     }
-    database.store_vsid(**insert_vsid_payload)
-    return "Stored vsid"
-
-
-@bp.route('/wave2_exposure', methods=['GET', 'POST'])
-def wave2_exposure():
-    user_id = request.args.get("user_id").strip()
-
-    # store in DB:
-    insert_group_payload = {
-        "user_id": user_id
-    }
-    user_exposure = database.get_wave2_exposure(**insert_group_payload)
-
-    twitter_handles = [item['twitter_handle'] for item in user_exposure]
-
-    # Load inventory with target user ids
-    inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")),
-                            dtype={"target_user_id": str, "twitter_handle": str, "name_with_handle": str})
-    inventory_sorted = inventory.sort_values(by="followers", ascending=False)
-
-    # Map twitter_handles to name_with_handles
-    handle_to_name_with_handle = dict(zip(inventory_sorted["twitter_handle"], inventory_sorted["name_with_handle"]))
-
-    # Extract two target_usernames elements that are not in twitter_handles and their corresponding name_with_handle
-    not_in_user_exposure_handles = [username for username in inventory_sorted["twitter_handle"].tolist() if
-                                    username not in twitter_handles][:2]
-    not_in_user_exposure_names = [handle_to_name_with_handle[handle] for handle in not_in_user_exposure_handles]
-    other_account1_name = not_in_user_exposure_names[0]
-    other_account2_name = not_in_user_exposure_names[1]
-
-    # Modify the sorting and selection to use name_with_handle
-    followed_accounts = [e for e in user_exposure if e['following'] and not e['hometimeline']]
-    followed_accounts_sorted = sorted(followed_accounts, key=lambda x: int(x['followers']), reverse=True)
-    followed_accounts_sorted_names = [handle_to_name_with_handle[e['twitter_handle']] for e in followed_accounts_sorted
-                                      if e['twitter_handle'] in handle_to_name_with_handle]
-
-    hometimeline_accounts = [e for e in user_exposure if not e['following'] and e['hometimeline']]
-    hometimeline_accounts_sorted = sorted(hometimeline_accounts, key=lambda x: int(x['followers']), reverse=True)
-    hometimeline_accounts_sorted_names = [handle_to_name_with_handle[e['twitter_handle']] for e in
-                                          hometimeline_accounts_sorted if
-                                          e['twitter_handle'] in handle_to_name_with_handle]
-
-    followed_account1_name = followed_accounts_sorted_names[0] if followed_accounts_sorted_names else "0"
-    followed_account2_name = followed_accounts_sorted_names[1] if len(followed_accounts_sorted_names) > 1 else "0"
-    hometimeline_account1_name = hometimeline_accounts_sorted_names[0] if hometimeline_accounts_sorted_names else "0"
-    hometimeline_account2_name = hometimeline_accounts_sorted_names[1] if len(
-        hometimeline_accounts_sorted_names) > 1 else "0"
-
-    result = f"{followed_account1_name}$$${followed_account2_name}$$$" \
-             f"{hometimeline_account1_name}$$${hometimeline_account2_name}$$$" \
-             f"{other_account1_name}$$${other_account2_name}"
-
+    result = database.store_vsid(**insert_vsid_payload)
     return result
+
+
+@bp.route('/store_w1_status', methods=['GET', 'POST'])
+def store_w1_status():
+    """
+    Called at the end of the Wave 1 survey to update the user's W1 status.
+    """
+    user_id = request.args.get("user_id").strip()
+    vsid = request.args.get("vsid").strip()
+    session_start = datetime.now().isoformat()
+
+    database.update_w1_status(user_id, vsid, session_start)
+    return "DONE"
 
 
 @bp.route('/store_group', methods=['GET', 'POST'])
@@ -390,28 +292,40 @@ def store_group():
         "randomized_group": randomized_group,
         "session_start": current_timestamp
     }
-    database.store_randomized_group(**insert_group_payload)
+    database.store_w2_randomized_group(**insert_group_payload)
     return "DONE!"
 
 
 @bp.route('/random70_mute', methods=['GET', 'POST'])
 def random70_mute():
     """
-    In the end of the Wave 2 survey, this endpoint is called.
+    In the end of the Wave 1 survey, this endpoint is called.
     For each participant, we randomly sample accounts that should be (in real or counterfactually) muted.
     Then, we store sampled target accounts (for muting) as a separate file for each user_id.
     """
     user_id = request.args.get("user_id").strip()
-    randomized_group = request.args.get("group").strip()
 
     # retrieve low quality accounts inventory
-    inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")))
-    # cutoff (95%)
-    # reorder by number of follows !!!! - missed this terribly sorry
-    reduced_inventory = inventory[:489]
-    # order by exposure per Option 2
-    reduced_inventory = reduced_inventory.sort_values(by='exposure', ascending=False)
-    num_groups = len(reduced_inventory) // 10
+    inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")),
+                            dtype={"target_user_id": str, "twitter_handle": str,
+                                   "followers": int, "exposure": int, "followed_by": int,
+                                   "total_engagement": int, "name": str,
+                                   "name_with_handle": str})
+    inventory = inventory.reset_index(drop=True)
+
+    inventory_sorted = inventory.sort_values(
+        by=["followed_by", "total_engagement",  "exposure", "followers"],
+        ascending=[False, False, False, False]
+    )
+    # cutoff (95%) by `followed_by` (~443 accounts)
+    reduced_inventory = inventory_sorted[:442]
+
+    # order by exposure per Option 2 (change this!!)
+    reordered_inventory = reduced_inventory.sort_values(
+        by=["total_engagement", "followed_by", "exposure", "followers"],
+        ascending=[False, False, False, False]
+    )
+    num_groups = len(reordered_inventory) // 10
     muted_list = []
     end_idx = 0  # initial number
     for j in range(num_groups):
@@ -422,8 +336,8 @@ def random70_mute():
         sample_df = group_df.sample(frac=0.7, replace=False)
         muted_list.extend(sample_df.to_dict('records'))
     # If we have not reached the total samples, add more from the remaining data
-    while len(muted_list) < 342:  # change the numbers here
-        remaining_samples = 342 - len(muted_list)
+    while len(muted_list) < 310:  # change the numbers here
+        remaining_samples = 310 - len(muted_list)
         remaining_df = inventory.iloc[end_idx:]  # Remaining data after the last group
         extra_samples = remaining_df.sample(n=min(len(remaining_df), remaining_samples), replace=False)
         muted_list.extend(extra_samples.to_dict('records'))
@@ -435,7 +349,7 @@ def random70_mute():
     # Save the result to a JSON file per user:
     with open(os.path.join(directory, f"muted_accounts_for_{user_id}.json"), 'w') as f:
         f.write(json.dumps(muted_list, indent=4))
-    return f"Stored {randomized_group=} and sampled muted accounts for {user_id=}"
+    return f"Stored and sampled muted accounts for {user_id=}"
 
 
 @bp.route('/mute_group', methods=['GET', 'POST'])
@@ -460,7 +374,7 @@ def mute_group():
 @bp.route('/get_userid', methods=['GET', 'POST'])
 def get_userid():
     """
-    In Wave 2, this function retrieves the corresponding user_id from DB with vsid (Verasight's participant ID).
+    In Wave 2 and Wave 3, this function retrieves the corresponding user_id from DB with vsid (Verasight's participant ID).
     Returns: user_id
     """
     vsid = request.args.get("vsid")
@@ -539,10 +453,16 @@ def follow_politifact():
     return response_message
 
 
-@bp.route('/get_exposure', methods=['GET', 'POST'])
-def get_exposure():
+@bp.route('/w2_exposure', methods=['GET', 'POST'])
+def w2_exposure():
     """
-    Wave 3
+    Wave 2 exposure question
+    Change:
+    - Pre-defined list of top 20 LQ accounts by `followed_by`
+    - followed_account1, 2 : eligibility > connection_status
+        - if there are followed LQ account, handle (@), otherwise, null
+    - other_muted_account1, 2 : muting_job > muted_accounts
+    - other_unmuted_account1, 2 : rest of the list, randomly choose 2
     """
     if "user_id" in request.args:
         user_id = request.args.get("user_id").strip()
@@ -550,139 +470,174 @@ def get_exposure():
         abort(500, "No user_id specified. Aborting.")
     logging.info(f"Getting exposure of {user_id=}")
 
-    # top 10 with most followers
-    top_10 = ["FoxNews", "CGTNOfficial", "XHNews", "TuckerCarlson",
-              "DonaldJTrumpJr", "Cobratate", "AJEnglish",
-              "PDChina", "seanhannity", "wikileaks"]
+    # Top 20 with most `followed_by` in the pilot
+    top_20 = ["RealAlexJones", "infowars", "TuckerCarlson", "FoxNews",
+              "DonaldJTrumpJr", "seanhannity", "DineshDSouza",
+              "marklevinshow", "NEWSMAX", "MSNBC", "IngrahamAngle",
+              "catturd2", "JudicialWatch", "OANN", "scrowder", "bennyjohnson",
+              "hodgetwins", "TomFitton", "charliekirk11", "Franklin_Graham"]
+
+    # Load inventory with target user ids
+    inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")),
+                            dtype={"target_user_id": str, "twitter_handle": str, "name_with_handle": str})
+    inventory_sorted = inventory.sort_values(by="followed_by", ascending=False)
+
+    # Map twitter_handles to name_with_handles
+    handle_to_name_with_handle = dict(zip(inventory_sorted["twitter_handle"], inventory_sorted["name_with_handle"]))
 
     # Load the muted accounts data
-    directory = f"{data_dir}/muting_job/muted_accounts"
-    if not os.path.exists(directory):
-        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-        os.makedirs(directory, exist_ok=True)
-    muted_accounts_file = os.path.join(directory, f"muted_accounts_for_{user_id}.json")
-    with open(muted_accounts_file, 'r') as file:
-        muted_data = json.load(file)
-    # Load hometimeline match data
-    directory = f"{data_dir}/eligibility/hometimeline_match"
-    if not os.path.exists(directory):
-        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-        os.makedirs(directory, exist_ok=True)
-    hometimeline_match_file = os.path.join(directory, f"match_for_{user_id}.json")
-    author_ids = []
-    matched_accounts = []
-    with open(hometimeline_match_file, 'r') as file:
-        hometimeline_data = json.load(file)
-    # Loop through the dictionary and add the IDs to author_ids
-    for ids in hometimeline_data.values():
-        for item in ids:
-            author_ids.append(item['user_id'])
-    # Convert all author_ids to strings and eliminate duplicates in one step
-    author_ids = set(str(author_id) for author_id in author_ids)
+    muted_accounts_directory = f"{data_dir}/muting_job/muted_accounts"
+    muted_accounts_file = os.path.join(muted_accounts_directory, f"muted_accounts_for_{user_id}.json")
 
-    # Iterate through each account in muted_data to find matched accounts
-    for account in muted_data:
-        target_user_id = account["target_user_id"]
-        if target_user_id in author_ids:
-            matched_accounts.append(target_user_id)  # Add the matched account
+    try:
+        with open(muted_accounts_file, 'r') as file:
+            muted_data = json.load(file)
+    except Exception as e:
+        logging.error(f"Error reading muted accounts file for {user_id=}: {str(e)}")
+        # Just choose top 4
+        muted_data = [{"twitter_handle": handle} for handle in top_20[:4]]
 
-    # Update lq_followed_and_muted based on whether any matches were found
-    lq_hometimeline_and_muted = 'T' if matched_accounts else 'F'
+    # Load connection status data
+    connection_status_directory = f"{data_dir}/eligibility/connection_status"
+    follow_status_file = os.path.join(connection_status_directory, f"Connection_status_{user_id}.json")
 
-    if lq_hometimeline_and_muted == 'T':
-        # Convert matched accounts to a set of integers for comparison
-        matched_accounts_set = set(matched_accounts)
+    try:
+        with open(follow_status_file, 'r') as file:
+            follow_status_data = json.load(file)
+    except Exception as e:
+        logging.error(f"Error reading connection status file for {user_id=}: {str(e)}")
+        follow_status_data = []
 
-        # Filter the muted data to find the matched accounts details
-        matched_accounts_details = [account for account in muted_data if
-                                    account["target_user_id"] in matched_accounts_set]
+    # Initialize
+    followed_lq_account_usernames = []
 
-        # Find the highest followed account from matched accounts in muted_accounts
-        highest_followed_account = max(matched_accounts_details, key=lambda x: x["followers"])
-        highest_followed_handle = highest_followed_account["twitter_handle"]
+    # Loop through the list
+    for username in follow_status_data:
+        # Check if 'connection_status' exists and contains 'following'
+        if 'connection_status' in username and 'following' in username['connection_status']:
+            # If condition is met, append the 'username' to author_ids
+            followed_lq_account_usernames.append(username['username'])
 
-        # Select top 3 accounts from remaining muted accounts from muted_data, excluding the highest followed one
-        remaining_muted_accounts = [account for account in muted_data if
-                                    account["twitter_handle"] != highest_followed_handle]
+    # replace all_handles_str with name_with_handle
+    followed_lq_account_usernames = [handle_to_name_with_handle.get(handle, "") for handle in followed_lq_account_usernames]
 
-        # Now select the top 3 followed accounts from the remaining muted accounts
-        top_3_muted_handles = sorted(remaining_muted_accounts, key=lambda x: x["followers"], reverse=True)[:3]
-        top_3_muted_handles = [account["twitter_handle"] for account in top_3_muted_handles]
+    # If there are less than two followed LQ accounts, put '0'
+    while len(followed_lq_account_usernames) < 2:
+        followed_lq_account_usernames.append('0')
 
-        # Select the three accounts from top_10 that are not in the muted_accounts
-        non_muted_handles = [handle for handle in top_10 if
-                             handle not in [account["twitter_handle"] for account in muted_data]]
-        non_muted_handles = non_muted_handles[:3]
+    # Followed_LQ_account_usernames: max. 2 accounts
+    followed_lq_account_usernames = followed_lq_account_usernames[:2]
 
-        # Concatenate all selected handles
-        all_handles = [highest_followed_handle] + top_3_muted_handles + non_muted_handles
-        all_handles_str = [str(handle) for handle in all_handles]  # Ensure all handles are strings
+    # Remove followed LQ account from top 20
+    top_20 = [account for account in top_20 if account not in followed_lq_account_usernames]
 
-        # Load inventory with target user ids
-        inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")),
-                                dtype={"target_user_id": str, "twitter_handle": str, "name_with_handle": str})
-        inventory_sorted = inventory.sort_values(by="followers", ascending=False)
+    # Muted and Unmuted LQ accounts
+    muted_top_accounts = [account['twitter_handle'] for account in muted_data if account['twitter_handle'] in top_20]
 
-        # Map twitter_handles to name_with_handles
-        handle_to_name_with_handle = dict(zip(inventory_sorted["twitter_handle"], inventory_sorted["name_with_handle"]))
+    unmuted_top_accounts = [account for account in top_20 if account not in muted_top_accounts]
 
-        # replace all_handles_str with name_with_handle
-        all_names_with_handle = [handle_to_name_with_handle.get(handle, "") for handle in all_handles_str]
+    # Choose max. 2 accounts
+    other_muted_accounts = muted_top_accounts[:2]
+    other_unmuted_accounts = unmuted_top_accounts[:2]
 
-        return "$$$".join(all_names_with_handle)
+    # If we don't have 2 unmuted accounts from top 20, look in the rest of the inventory
+    if len(other_unmuted_accounts) < 2:
+        available_accounts = [account for account in inventory_sorted['twitter_handle']
+                              if account not in [acc['twitter_handle'] for acc in muted_data]
+                              and account not in top_20]
+
+        # Add accounts from available_accounts until we have 2
+        other_unmuted_accounts.extend(available_accounts[:2 - len(other_unmuted_accounts)])
+
+    # replace all_handles_str with name_with_handle
+    other_muted_accounts = [handle_to_name_with_handle.get(handle, "") for handle in other_muted_accounts]
+    other_unmuted_accounts = [handle_to_name_with_handle.get(handle, "") for handle in other_unmuted_accounts]
+
+    # Concatenate all selected handles
+    all_handles = followed_lq_account_usernames + other_muted_accounts + other_unmuted_accounts
+    all_handles_str = [str(handle) for handle in all_handles]  # Ensure all handles are strings
+
+    # store in DB:
+    insert_group_payload = {
+        "user_id": user_id,
+        "followed_account1": all_handles_str[0],
+        "followed_account2": all_handles_str[1],
+        "other_muted_account1": all_handles_str[2],
+        "other_muted_account2": all_handles_str[3],
+        "other_unmuted_account1": all_handles_str[4],
+        "other_unmuted_account2": all_handles_str[5]
+    }
+    database.save_exposure(**insert_group_payload)
+    return "$$$".join(all_handles_str)
+
+
+@bp.route('/w3_exposure', methods=['GET', 'POST'])
+def w3_exposure():
+    """
+    Wave 3 exposure question
+    - Load the exposure data saved from Wave 2
+    - Return the same followed_account1, 2; other_muted_account1, 2; other_unmuted_account1, 2
+    """
+    if "user_id" in request.args:
+        user_id = request.args.get("user_id").strip()
     else:
-        # Select top 4 followed accounts from muted accounts
-        top_7_muted_accounts = sorted(muted_data, key=lambda x: x['followers'], reverse=True)[:7]
-        top_7_muted_handles = [account['twitter_handle'] for account in top_7_muted_accounts]
-        top_4_muted_handles = top_7_muted_handles[:4]
+        abort(500, "No user_id specified. Aborting.")
 
-        # Select top 1 followed accounts that are non-muted
-        client = tweepy.Client(
-            consumer_key=cred['key'],
-            consumer_secret=cred['key_secret'],
-            access_token=cred['access_token'],
-            access_token_secret=cred['access_token_secret'],
-            return_type=dict,
-            wait_on_rate_limit=True
-        )
+    logging.info(f"Getting Wave 3 exposure for {user_id=}")
 
-        if list(author_ids):  # check if author_ids is not empty (no hometimeline tweet)
-            response = client.get_users(ids=list(author_ids), user_auth=True, user_fields='public_metrics')
-            response['data'] = [user for user in response['data'] if user['username'] not in top_4_muted_handles]
-            highest_followed_nonmuted = max(response['data'], key=lambda x: x['public_metrics']['followers_count'])[
-                'username']
-        else:  # if there is no low quality accounts in hometimeline
-            highest_followed_nonmuted = None
+    try:
+        # Load the exposure data from the database
+        exposure_data = database.get_exposure(user_id)
 
-        # Select top 2 followed accounts from top_10, excluding the ones already selected
-        if highest_followed_nonmuted:
-            filtered_top_10 = [handle for handle in top_10 if
-                               handle not in top_7_muted_handles and handle != highest_followed_nonmuted]
-            selected_non_muted_handles = filtered_top_10[:2]
-        else:
-            filtered_top_10 = [handle for handle in top_10 if
-                               handle not in top_7_muted_handles and handle != highest_followed_nonmuted]
-            selected_non_muted_handles = filtered_top_10[:3]
+        if exposure_data is None:
+            logging.error(f"No exposure data found for {user_id=}")
 
-        # Concatenate all selected handles
-        # all_handles = top_4_muted_handles + [highest_followed_nonmuted] + selected_non_muted_handles
-        all_handles = top_4_muted_handles + [
-            highest_followed_nonmuted] + selected_non_muted_handles if highest_followed_nonmuted else (
-                top_4_muted_handles + selected_non_muted_handles)
+        # Extract the accounts
+        all_handles = [
+            exposure_data['followed_account1'],
+            exposure_data['followed_account2'],
+            exposure_data['other_muted_account1'],
+            exposure_data['other_muted_account2'],
+            exposure_data['other_unmuted_account1'],
+            exposure_data['other_unmuted_account2']
+        ]
 
-        all_handles_str = [str(handle) for handle in all_handles]  # Ensure all handles are strings
-        # Load inventory with target user ids
-        inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")),
-                                dtype={"target_user_id": str, "twitter_handle": str, "name_with_handle": str})
-        inventory_sorted = inventory.sort_values(by="followers", ascending=False)
+        # Convert to string and join
+        all_handles_str = [str(handle) for handle in all_handles]
+        result = "$$$".join(all_handles_str)
+        return result
 
-        # Map twitter_handles to name_with_handles
-        handle_to_name_with_handle = dict(zip(inventory_sorted["twitter_handle"], inventory_sorted["name_with_handle"]))
+    except ValueError as ve:
+        logging.error(f"Error retrieving Wave 3 exposure data for {user_id=}: {str(ve)}")
+        abort(404, f"Exposure data not found: {str(ve)}")
+    except Exception as e:
+        logging.error(f"Unexpected error retrieving Wave 3 exposure data for {user_id=}: {str(e)}")
+        abort(500, f"Error retrieving exposure data: {str(e)}")
 
-        # replace all_handles_str with name_with_handle
-        all_names_with_handle = [handle_to_name_with_handle.get(handle, "") for handle in all_handles_str]
 
-        return "$$$".join(all_names_with_handle)
+@bp.route('/store_w3_group', methods=['GET', 'POST'])
+def store_w3_group():
+    """
+    In the end of the Wave 3 survey, this endpoint is called.
+    This function stores each participant's newly randomly assigned group in DB
+    along with random price $ and the current timestamp.
+    """
+    user_id = request.args.get("user_id").strip()
+    w3_randomized_group = request.args.get("group").strip()
+    random_price = request.args.get("random_price").strip()
+
+    # Get current timestamp
+    current_timestamp = datetime.now().isoformat()
+
+    # store in DB:
+    insert_group_payload = {
+        "user_id": user_id,
+        "w3_randomized_group": w3_randomized_group,
+        "random_price": random_price,
+        "session_start": current_timestamp
+    }
+    database.store_w3_randomized_group(**insert_group_payload)
+    return "DONE!"
 
 
 @bp.after_request

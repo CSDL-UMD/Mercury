@@ -102,7 +102,7 @@ def pre_treatment_engagement():
             # Get the username of each user_id:
             client = tweepy.Client(bearer_token, return_type=dict)
             response = client.get_user(id=user_id)
-            if 'data' in response:
+            if 'data' in response:      # this is way to do! keep this approach when data in response situation
                 username = response['data']['username']
             else:
                 logging.error(f"No 'data' key for {user_id=}")

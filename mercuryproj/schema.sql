@@ -16,7 +16,8 @@ CREATE TABLE mercury_user (
     access_token_secret VARCHAR(255),
     session_start TIMESTAMP,
     oauth_token VARCHAR(255),
-    vsid VARCHAR(255)
+    vsid VARCHAR(255),
+    w1_status BOOLEAN
 );
 
 DROP TABLE IF EXISTS following_result;
@@ -150,4 +151,28 @@ CREATE TABLE eligible_users (
     access_token_secret VARCHAR(255),
     session_start TIMESTAMP,
     oauth_token VARCHAR(255)
+);
+
+DROP TABLE IF EXISTS w3_randomized_group;
+
+CREATE TABLE w3_randomized_group (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255),
+    w3_randomized_group VARCHAR(255),
+    random_price NUMERIC,
+    session_start TIMESTAMP
+);
+
+DROP TABLE IF EXISTS exposure_table;
+
+CREATE TABLE exposure_table (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL,
+    followed_account1 VARCHAR(255),
+    followed_account2 VARCHAR(255),
+    other_muted_account1 VARCHAR(255),
+    other_muted_account2 VARCHAR(255),
+    other_unmuted_account1 VARCHAR(255),
+    other_unmuted_account2 VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

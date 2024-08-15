@@ -1,18 +1,13 @@
 """
-DM module + checking compliance for muting job.
-Cronjob: Every evening at 6PM
-
-During treatment period:
-- `mute_compliance()`
-
-Automation from 6 days after the start of Wave 2:
-- dm1(), dm2(), dm3()
+Checking compliance for muting job during treatment period:
+- `check_mute_compliance()`
 """
+import time
+
 import csv
 import json
 import logging
 import os
-import tweepy
 import requests
 from requests_oauthlib import OAuth1
 from datetime import datetime
@@ -32,277 +27,24 @@ if not os.path.exists(data_dir):
     os.mkdir(data_dir)
 
 
-dm1_text = """We are writing to remind you about these tips that will help you to better evaluate the headlines you see on social media. Please read the information below carefully. We will invite you to take part in our next survey in approximately three weeks.
-
-*WHY WAS THIS STORY SHARED?*
-Think about the motivations of the organization that published the story and the person who shared it. Do they benefit from convincing you of something? Is the post politically motivated?  
-
-*WATCH FOR UNUSUAL FORMATTING*
-Many false news stories have misspellings or awkward layouts. If you see these signs, reconsider trusting or sharing the story.  
-
-*CONSIDER THE PHOTOS*
-False news stories often contain manipulated images or videos. Sometimes the photo may be authentic, but taken out of context. Check the photos before you read on or share. 
-
-*LOOK CLOSELY AT THE WEBSITE DOMAIN*
-A phony or look-alike domain may be a warning sign of false news. Many false news sites mimic authentic news sources by making small changes to the website name.
-
-*BE SKEPTICAL OF HEADLINES*
-False news stories often have catchy headlines in all caps with exclamation points. If shocking claims in the headline sound unbelievable, they probably are.  
-
-*IS THE STORY A JOKE?*
-Sometimes false news stories can be hard to distinguish from humor or satire. Check whether the story’s details and tone suggest it may be just for fun.  
-
-*CONSIDER THE SOURCE*
-Ask whether the story is published by a website that is widely trusted with a reputation for accuracy. If the story comes from an unfamiliar organization, the information may not be reliable.  
-
-→ Please confirm you have read this message by responding “Yes.” 
-"""
-
-dm2_text = """
-We are writing to remind you about these tips that will help you to better evaluate the headlines you see on social media. Please read the information below carefully. We will invite you to take part in our next survey in approximately two weeks.
-
----
-
-***Let's test your false news spotting skills! 🕵️‍♂️***
-
-***Here are the first three tips you should use:***
-
-Tip: Why was this story shared? 
-
-Think about the motivations of the organization that published the story and the person who shared it. Do they benefit from convincing you of something? Is the post politically motivated?
-
-Tip: Be skeptical of headlines. 
-
-False news stories often have catchy headlines in all caps with exclamation points. If shocking claims in the headline sound unbelievable, they probably are.  
-
-Tip: Consider the source.
-
-Ask whether the story is published by a website that is widely trusted with a reputation for accuracy. If the story comes from an unfamiliar organization, the information may not be reliable.  
-
-***Do you remember these tips?***
-
-Tip: Watch for unusual formatting. Many false news stories have misspellings or awkward layouts. If you see these signs, reconsider trusting or sharing the story.
-Did you know that one?
-
-Tip: Is the story a joke? Sometimes false news stories can be hard to distinguish from humor or satire. Check whether the story’s details and tone suggest it may be just for fun.
-
-Tip: Consider the photos. False news stories often contain manipulated images or videos. Sometimes the photo may be authentic, but taken out of context. Check the photos before you read on or share.
-
-***Last tip for now - don’t forget about this one!***
-
-Tip: Look closely at the website domain. A phony or look-alike domain may be a warning sign of false news. Many false news sites mimic authentic news sources by making small changes to the website name.
-
-→ Please confirm you have read this message by responding “Yes.” 
-"""
-
-dm3_text = """
-We are writing to remind you about these tips that will help you to better evaluate the headlines you see on social media. Please read the information below carefully. We will invite you to take part in our next survey in approximately one week.
-
-*** Challenge time! 🌟 Over the next week, try using these tips to spot fake news. Let's see how many false stories you can identify! ***
-
-Tip 1: Be skeptical of headlines. False news stories often have catchy headlines in all caps with exclamation points. If shocking claims in the headline sound unbelievable, they probably are.
-
-Tip 2: Consider the source. Ask whether the story is published by a website that is widely trusted with a reputation for accuracy. If the story comes from an unfamiliar organization, the information may not be reliable.
-
-Tip 3: Watch for unusual formatting. Many false news stories have misspellings or awkward layouts. If you see these signs, reconsider trusting or sharing the story.
-
-Tip 4: Consider the photos. False news stories often contain manipulated images or videos. Sometimes the photo may be authentic, but taken out of context. Check the photos before you read on or share.
-
-Tip 5: Why was this story shared? Think about the motivations of the organization that published the story and the person who shared it. Do they benefit from convincing you of something? Is the post politically motivated?
-
-Tip 6: Is the story a joke? Sometimes false news stories can be hard to distinguish from humor or satire. Check whether the story’s details and tone suggest it may be just for fun.
-
-Tip 7: Look closely at the website domain. A phony or look-alike domain may be a warning sign of false news. Many false news sites mimic authentic news sources by making small changes to the website name.
-
-→ Please confirm you have read this message by responding “Yes.”
-"""
-
-non_dm1_text = """ We will invite you to take part in our next survey in approximately three weeks.
-
-→ Please confirm you have read this message by responding “Yes.” 
-"""
-
-non_dm2_text = """ We will invite you to take part in our next survey in approximately two weeks.
-
-→ Please confirm you have read this message by responding “Yes.” 
-"""
-
-non_dm3_text = """ We will invite you to take part in our next survey in approximately one week.
-
-→ Please confirm you have read this message by responding “Yes.” 
-"""
-
-
-def dm1():
+def check_mute_compliance():
     """
-    This function retrieves newly updated users (from a week ago), and send DMs to these users.
+    Check mute compliance for users and generate a compliance report.
+
+    This function performs the following tasks:
+    1. Retrieves users who have completed the muting process (state "Done").
+    2. For each user:
+       a) Fetches their Twitter API access tokens.
+       b) Loads the list of accounts they were supposed to mute.
+       c) Chunks the list of accounts to be checked (maximum 100 per request).
+       d) For each chunk, sends a request to the Twitter API to check the current connection status.
+       e) Collects all the response data, including the connection status of each account.
+       f) Saves the raw response data to a JSON file for future reference.
+    3. Generates a compliance report, listing users who have unmuted accounts they were supposed to keep muted.
+    4. Saves raw muting data for each user for future reference.
+    5. Appends new compliance data to an ongoing CSV report.
     """
-    user_list = database.get_users_from_week()
-    logging.info(f'DM1 - Users from a week ago: {user_list=}')
-    # Make a client for DM
-    client_dm = tweepy.Client(
-        consumer_key=cred['key'],
-        consumer_secret=cred['key_secret'],
-        access_token=cred['access_token'],
-        access_token_secret=cred['access_token_secret'],
-        wait_on_rate_limit=True
-    )
-    # For each user, iterate the following:
-    for user_id in user_list:
-        # Get each user's randomized group info
-        response = database.get_randomized_group(user_id=user_id)
-        if response == "drop" or response == "muting_treatment2_drop":
-            continue
-        elif response == "media_literacy":
-            try:
-                # If the user is in media_literacy group, send dm1_text
-                text = dm1_text
-                dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
-                dm1_timestamp = datetime.now()  # Get current time
-                timestamp = dm1_timestamp.date()
-                dm_conversation_id = dm.data['dm_conversation_id']
-                dm_event_id = dm.data['dm_event_id']
-                text_type = "dm1_text"
-                # store in DB:
-                insert_dm1_payload = {
-                    "user_id": user_id,
-                    "conversation_id": dm_conversation_id,
-                    "event_id": dm_event_id,
-                    "timestamp": timestamp,
-                    "text_type": text_type
-                }
-                database.store_dm1(**insert_dm1_payload)
-            except Exception as e:
-                logging.error(f'Error sending DM1 to {user_id=}: ' + str(e))
-        else:
-            try:
-                # If the user is not media_literacy group:
-                text = non_dm1_text
-                dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
-                dm1_timestamp = datetime.now()
-                timestamp = dm1_timestamp.date()
-                dm_conversation_id = dm.data['dm_conversation_id']
-                dm_event_id = dm.data['dm_event_id']
-                text_type = 'non_dm1_text'
-                # store in DB:
-                insert_dm1_payload = {
-                    "user_id": user_id,
-                    "conversation_id": dm_conversation_id,
-                    "event_id": dm_event_id,
-                    "timestamp": timestamp,
-                    "text_type": text_type
-                }
-                database.store_dm1(**insert_dm1_payload)
-            except Exception as e:
-                logging.error(f'Error sending DM1 to {user_id=}: ' + str(e))
-    logging.info(f'Sending the first DM1 to {user_list=} is done.')
 
-
-def dm2():
-    user_info_list = database.get_dm1()
-    logging.info(f'DM2 - Users from a week ago: {user_info_list=}')
-    client_dm = tweepy.Client(
-        consumer_key=cred['key'],
-        consumer_secret=cred['key_secret'],
-        access_token=cred['access_token'],
-        access_token_secret=cred['access_token_secret'],
-        wait_on_rate_limit=True
-    )
-    for user_id, text_type in user_info_list:
-        try:
-            # Check DM event to retrieve meta info
-            dm1_response = client_dm.get_direct_message_events(participant_id=user_id)
-            dm1_count = str(dm1_response.meta['result_count'])
-            # If dm1_count is larger than 1, there is a response
-        except Exception as e:
-            logging.error(f'Retrieving DM1 count for {user_id=}: ' + str(e))
-            dm1_count = "error"
-
-        # Determine the type of message to send based on text_type
-        if text_type == "non_dm1_text":
-            text = non_dm2_text
-            text_type = 'non_dm2_text'
-        elif text_type == "dm1_text":
-            text = dm2_text
-            text_type = 'dm2_text'
-        else:
-            continue  # If the text_type is not recognized, skip to the next iteration
-
-        # Send Direct Message
-        logging.info(f'Sending DM2 for {user_id=}')
-        try:
-            dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
-            dm_timestamp = datetime.now()
-            timestamp = dm_timestamp.date()
-            # Store DM info using a new store_dm2 function to be created in the database module
-            database.store_dm2(
-                user_id=user_id,
-                conversation_id=dm.data['dm_conversation_id'],
-                event_id=dm.data['dm_event_id'],
-                timestamp=timestamp,
-                text_type=text_type,
-                dm1_count=dm1_count
-            )
-        except Exception as e:
-            logging.error(f'Error sending DM2 to {user_id=}: ' + str(e))
-
-
-def dm3():
-    # Fetch the list of users and their text types who received a DM2 a week ago
-    user_info_list = database.get_dm2()
-    logging.info(f'DM3 - Users from a week ago: {user_info_list=}')
-    client_dm = tweepy.Client(
-        consumer_key=cred['key'],
-        consumer_secret=cred['key_secret'],
-        access_token=cred['access_token'],
-        access_token_secret=cred['access_token_secret'],
-        wait_on_rate_limit=True
-    )
-    for user_id, text_type in user_info_list:
-        try:
-            # Check DM event to retrieve meta info
-            dm2_response = client_dm.get_direct_message_events(participant_id=user_id)
-            dm2_count = str(dm2_response.meta['result_count'])
-        except Exception as e:
-            logging.error(f'Retrieving DM2 count for {user_id=}: ' + str(e))
-            dm2_count = "error"
-
-        # Determine the type of message to send based on text_type
-        if text_type == "non_dm2_text":
-            text = non_dm3_text
-            text_type = 'non_dm3_text'
-        elif text_type == "dm2_text":
-            text = dm3_text
-            text_type = 'dm3_text'
-        else:
-            continue  # If the text_type is not recognized, skip to the next iteration
-
-        # Send Direct Message
-        logging.info(f'Sending DM3 for {user_id=}')
-        try:
-            dm = client_dm.create_direct_message(participant_id=user_id, user_auth=True, text=text)
-            dm_timestamp = datetime.now()
-            timestamp = dm_timestamp.date()
-
-            # Store DM info
-            database.store_dm3(
-                user_id=user_id,
-                conversation_id=dm.data['dm_conversation_id'],
-                event_id=dm.data['dm_event_id'],
-                timestamp=timestamp,
-                text_type=text_type,
-                dm2_count=dm2_count
-            )
-        except Exception as e:
-            logging.error(f'Error sending DM3 to {user_id=}: ' + str(e))
-
-
-def muting_relationship_check():
-    """
-    This function checks muting relationship between user_id and target_user_id in that user's muted_list.
-    This function returns and saves the dyad relationships between user_id and target_user_ids.
-    Combined with mute_compliance() function, the purpose is to check whether user is keep muting the target_user_id.
-    """
     # Retrieve mute state: compliance check only for "Done"
     users_dict = database.get_mute_state()
     all_users_state = users_dict.get("users_state", [])
@@ -376,17 +118,53 @@ def muting_relationship_check():
             json.dump(all_data, file, ensure_ascii=False, indent=4)
         logging.info(f'Finished processing connection_status for {user_id=}')
 
-    logging.info(f'End checking relationships between users and inventory accounts')
+    time.sleep(10)
+
+    logging.info('Now, mute compliance processing initiated')
+    # Retrieve compliance files - Extract unique user IDs and their latest file
+    directory = os.path.join(data_dir, "muting_job", "compliance")
+    files = os.listdir(directory)
+    user_files = {}
+    for file_name in files:
+        if file_name.endswith('.json'):
+            user_id, date_str = file_name.rsplit('_', 1)[0], file_name.rsplit('_', 1)[-1].replace('.json', '')
+            date = datetime.strptime(date_str, '%Y-%m-%d')
+            if user_id not in user_files or date > user_files[user_id][1]:
+                user_files[user_id] = (file_name, date)
+
+    # Process the most recent file for each user ID
+    for user_id, (file_name, _) in user_files.items():
+        file_path = os.path.join(directory, file_name)
+        with open(file_path, 'r', encoding='utf-8') as file:
+            all_data = json.load(file)
+
+        # Apply the filtering and extracting logic here
+        filtered_data = [user for user in all_data if
+                         "connection_status" not in user or "muting" not in user["connection_status"]]
+        # Append to a CSV file
+        csv_file_path = os.path.join(directory, "compliance_report.csv")
+        with open(csv_file_path, 'a', newline='', encoding='utf-8') as csvfile:
+            fieldnames = ['file_user_id', 'target_user_id', 'target_username', 'time_day']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            if os.stat(csv_file_path).st_size == 0:  # If file is empty, write header
+                writer.writeheader()
+
+            time_day = str(datetime.now().date())
+            for user in filtered_data:
+                writer.writerow({
+                    'file_user_id': user_id,
+                    'target_user_id': user.get('id'),
+                    'target_username': user.get('username'),
+                    'time_day': time_day
+                })
+    logging.info(f'End mute compliance')
 
 
 def main():
     logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
-        muting_relationship_check()
-        # dm1()
-        dm2()
-        dm3()
+        check_mute_compliance()
 
 
 if __name__ == "__main__":

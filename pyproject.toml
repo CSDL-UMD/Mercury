@@ -47,9 +47,9 @@ where = ["."]
 
 [project.scripts]
 compliance-run = "mercuryproj.compliance:main"
-mute_compliance-run = "mercuryproj.mute_compliance:main"
 muting-run = "mercuryproj.muting:main"
-engagements-run = "mercuryproj.engagements:main"
+pre-engagements-run = "mercuryproj.pre_engagements:main"
+post-engagements-run = "mercuryproj.post_engagements:main"
+post-endline-engagements-run = "mercuryproj.post_endline_engagements:main"
 eligibility-run = "mercuryproj.eligibility:main"
 unmuting-run = "mercuryproj.unmuting:main"
-

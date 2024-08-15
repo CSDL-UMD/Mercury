@@ -163,41 +163,54 @@ def get_access_token(user_id):
     cursor.close()
 
 
-def store_following(user_id, success, session_start):
-    logging.info(f"Following MercuryUMD account: {user_id=}, {session_start=}")
-    sql_insert = """INSERT INTO following_result (user_id, success, session_start) VALUES(%s,%s,%s);"""
-    sql_update = """UPDATE following_result SET success = %s, session_start = %s WHERE user_id = %s;"""
+def save_exposure(user_id, followed_account1, followed_account2, other_muted_account1, other_muted_account2, other_unmuted_account1, other_unmuted_account2):
+    # Connect to the database
     connection = getdb()
     cursor = connection.cursor()
-    # Check if the user already exists in the database
-    cursor.execute("SELECT COUNT(*) FROM following_result WHERE user_id=%s;", (user_id,))
-    count_exists = cursor.fetchone()[0]
-    if count_exists > 0:
-        # Update existing user
-        cursor.execute(sql_update, (success, session_start, user_id))
-        logging.info(f"Friendship updated successfully: {user_id=}")
-    else:
-        # Insert new user
-        cursor.execute(sql_insert, (user_id, success, session_start))
-        logging.info(f"Friendship inserted successfully: {user_id=}")
+
+    # SQL query to insert data
+    insert_query = """
+    INSERT INTO exposure_table 
+    (user_id, followed_account1, followed_account2, other_muted_account1, other_muted_account2, other_unmuted_account1, other_unmuted_account2) 
+    VALUES (%s, %s, %s, %s, %s, %s, %s);
+    """
+
+    # Execute the query
+    cursor.execute(insert_query, (user_id, followed_account1, followed_account2, other_muted_account1, other_muted_account2, other_unmuted_account1, other_unmuted_account2))
+
+    logging.info(f"Exposure data saved successfully for user_id: {user_id}")
     cursor.close()
-    connection.commit()
 
 
-def get_wave2_exposure(user_id):
-    # Connect to the database and fetch all entries of user_id
+def get_exposure(user_id):
+    logging.info(f"Getting exposure data for {user_id=}")
     connection = getdb()
     cursor = connection.cursor()
-    cursor.execute("SELECT * FROM wave2_exposure_table WHERE user_id = %s;", (user_id,))
-    result = cursor.fetchall()
+    try:
+        cursor.execute(
+            "SELECT followed_account1, followed_account2, other_muted_account1, other_muted_account2, other_unmuted_account1, other_unmuted_account2 FROM exposure_table WHERE user_id=%s;",
+            (user_id,))
+        result = cursor.fetchone()
 
-    # Create a list of dictionaries to hold each row's data
-    users_exposure = [{"user_id": item[0], "target_user_id": item[1], "twitter_handle": item[2], "followers": item[3],
-                       "following": item[4], "hometimeline": item[5]} for item in result]
-    cursor.close()
-    connection.commit()
-    # Return the list of dictionaries
-    return users_exposure
+        if result:
+            exposure_data = {
+                "followed_account1": result[0],
+                "followed_account2": result[1],
+                "other_muted_account1": result[2],
+                "other_muted_account2": result[3],
+                "other_unmuted_account1": result[4],
+                "other_unmuted_account2": result[5]
+            }
+            logging.info(f"Successfully retrieved exposure data for {user_id=}")
+            return exposure_data
+        else:
+            logging.warning(f"No exposure data found for {user_id=}")
+            return None
+    except Exception as e:
+        logging.error(f"Error retrieving exposure data for {user_id=}: {str(e)}")
+        return None
+    finally:
+        cursor.close()
 
 
 def store_follow_politifact(user_id, success, session_start):
@@ -224,7 +237,7 @@ def store_follow_politifact(user_id, success, session_start):
     return jsonify(data=user_id)
 
 
-def store_randomized_group(user_id, randomized_group, session_start):
+def store_w2_randomized_group(user_id, randomized_group, session_start):
     logging.info(f"Randomized group update: {user_id=}, {randomized_group=}, {session_start=}")
     sql_insert = """INSERT INTO randomized_group (user_id, randomized_group, session_start) VALUES(%s, %s, %s);"""
     sql_update = """UPDATE randomized_group SET randomized_group = %s, session_start = %s WHERE user_id = %s;"""
@@ -249,10 +262,46 @@ def store_vsid(user_id, vsid):
     logging.info(f"Store vsid: {user_id=}, {vsid=}")
     connection = getdb()
     cursor = connection.cursor()
-    cursor.execute("""UPDATE mercury_user SET vsid = %s WHERE user_id = %s;""", (vsid, user_id))
-    logging.info(f"{user_id=}'s vsid inserted successfully!")
+    # Check:
+    cursor.execute("SELECT vsid FROM mercury_user WHERE user_id = %s", (user_id,))
+    result = cursor.fetchone()
+
+    if result and result[0] is not None and result[0] != vsid:
+        # if user_id already has vsid which is different from the new vsid input:
+        return "This Twitter user already exists"
+
+    # Store vsid otherwise:
+    if result:
+        cursor.execute("UPDATE mercury_user SET vsid = %s WHERE user_id = %s", (vsid, user_id))
+    else:
+        cursor.execute("INSERT INTO mercury_user (user_id, vsid) VALUES (%s, %s)", (user_id, vsid))
     cursor.close()
     connection.commit()
+    return "Success"
+
+
+def update_w1_status(user_id, vsid, session_start):
+    logging.info(f"Attempting to update W1 status of {user_id=}, {vsid=}")
+    connection = getdb()
+    cursor = connection.cursor()
+    try:
+        cursor.execute("""
+            UPDATE mercury_user 
+            SET session_start = %s, w1_status = TRUE 
+            WHERE user_id = %s AND vsid = %s
+        """, (session_start, user_id, vsid))
+
+        if cursor.rowcount == 0:
+            logging.error(f"No matching user_id and vsid pair found for {user_id=}, {vsid=}")
+        else:
+            connection.commit()
+            logging.info(f"Successfully updated W1 status for {user_id=}, {vsid=}")
+    except Exception as e:
+        logging.error(f"Error updating W1 status: {str(e)}")
+    finally:
+        cursor.close()
+
+    return "OK"
 
 
 def get_randomized_group(user_id):
@@ -343,26 +392,21 @@ def get_user_info(vsid):
     cursor.close()
 
 
-def get_users_from_week():
-    # Calculate yesterday's date
-    weekago_date = datetime.now() - timedelta(days=7)
-    weekago_str = weekago_date.strftime('%Y-%m-%d')  # Format as 'YYYY-MM-DD'
+def get_w1_session_start(user_id):
     connection = getdb()
     cursor = connection.cursor()
-    # SQL query to select user_ids where session_start is from week ago
     query = """
-        SELECT user_id
-        FROM randomized_group
-        WHERE DATE(session_start) = %s;
+        SELECT session_start
+        FROM mercury_user
+        WHERE user_id = %s;
     """
-    cursor.execute(query, (weekago_str,))
-    user_ids = [row[0] for row in cursor.fetchall()]
+    cursor.execute(query, (user_id,))
+    session_start = cursor.fetchone()[0] if cursor.rowcount != 0 else None
     cursor.close()
-    # Return the list of user_ids
-    return user_ids
+    return session_start
 
 
-def get_session_start(user_id):
+def get_w2_session_start(user_id):
     connection = getdb()
     cursor = connection.cursor()
     query = """
@@ -376,77 +420,43 @@ def get_session_start(user_id):
     return session_start
 
 
-def store_dm1(user_id, conversation_id, event_id, timestamp, text_type):
-    logging.info(f"Store DM1 for {user_id=}; {text_type=}")
-    sql_insert = """INSERT INTO dm1 (user_id, conversation_id, event_id, timestamp, text_type) VALUES(%s,%s,%s,%s,%s);"""
+def get_w3_session_start(user_id):
     connection = getdb()
     cursor = connection.cursor()
-    cursor.execute(sql_insert, (user_id, conversation_id, event_id, timestamp, text_type))
-    logging.info(f"DM1 status inserted successfully for {user_id=}")
-    cursor.close()
-    connection.commit()
-
-
-def store_dm2(user_id, conversation_id, event_id, timestamp, text_type, dm1_count):
-    logging.info(f"Store DM2 for {user_id=}; {text_type=}")
-    sql_insert = """INSERT INTO dm2 (user_id, conversation_id, event_id, timestamp, text_type, dm1_count) VALUES(%s,%s,%s,%s,%s,%s);"""
-    connection = getdb()
-    cursor = connection.cursor()
-    cursor.execute(sql_insert, (user_id, conversation_id, event_id, timestamp, text_type, dm1_count))
-    logging.info(f"DM2 status inserted successfully for {user_id=}")
-    cursor.close()
-    connection.commit()
-
-
-def store_dm3(user_id, conversation_id, event_id, timestamp, text_type, dm2_count):
-    logging.info(f"Store DM3 for {user_id=}; {text_type=}")
-    sql_insert = """INSERT INTO dm3 (user_id, conversation_id, event_id, timestamp, text_type, dm2_count) VALUES(%s,%s,%s,%s,%s,%s);"""
-    connection = getdb()
-    cursor = connection.cursor()
-    cursor.execute(sql_insert, (user_id, conversation_id, event_id, timestamp, text_type, dm2_count))
-    logging.info(f"DM3 status inserted successfully for {user_id=}")
-    cursor.close()
-    connection.commit()
-
-
-def get_dm1():
-    weekago_date = datetime.now() - timedelta(days=7)
-    weekago_str = weekago_date.strftime('%Y-%m-%d')  # Format as 'YYYY-MM-DD'
-    connection = getdb()
-    cursor = connection.cursor()
-    # Select user_ids where timestamp is from week ago
     query = """
-        SELECT user_id, text_type
-        FROM dm1
-        WHERE DATE(timestamp) = %s;
+        SELECT session_start
+        FROM w3_randomized_group
+        WHERE user_id = %s;
     """
-    cursor.execute(query, (weekago_str,))
-    user_info = [(row[0], row[1]) for row in cursor.fetchall()]  # List of tuples (user_id, text_type)
+    cursor.execute(query, (user_id,))
+    session_start = cursor.fetchone()[0] if cursor.rowcount != 0 else None
     cursor.close()
-    return user_info
-
-
-def get_dm2():
-    weekago_date = datetime.now() - timedelta(days=7)
-    weekago_str = weekago_date.strftime('%Y-%m-%d')  # Format as 'YYYY-MM-DD'
-    connection = getdb()
-    cursor = connection.cursor()
-    # Select user_ids where timestamp is from week ago
-    query = """
-        SELECT user_id, text_type
-        FROM dm2
-        WHERE DATE(timestamp) = %s;
-    """
-    cursor.execute(query, (weekago_str,))
-    user_info = [(row[0], row[1]) for row in cursor.fetchall()]  # List of tuples (user_id, text_type)
-    cursor.close()
-    return user_info
+    return session_start
 
 
 def get_all_users():
     connection = getdb()
     cursor = connection.cursor()
     cursor.execute("SELECT user_id FROM users_for_elig_test")
+    user_ids = [row[0] for row in cursor.fetchall()]
+    cursor.close()
+    # Return the list of user_ids
+    return user_ids
+
+
+def get_w1_users():
+    # Calculate yesterday's date
+    yesterday = datetime.now() - timedelta(days=1)
+    yesterday_str = yesterday.strftime('%Y-%m-%d')  # Format as 'YYYY-MM-DD'
+    connection = getdb()
+    cursor = connection.cursor()
+    # SQL query to select user_ids where session_start is from yesterday
+    query = """
+        SELECT user_id
+        FROM mercury_user
+        WHERE DATE(session_start) = %s;
+    """
+    cursor.execute(query, (yesterday_str,))
     user_ids = [row[0] for row in cursor.fetchall()]
     cursor.close()
     # Return the list of user_ids
@@ -464,13 +474,42 @@ def get_eligible_users():
 
 
 def get_w2_users():
+    # Calculate today's date
+    four_weeks_ago = datetime.now() - timedelta(days=1) - timedelta(weeks=4)  # Format as 'YYYY-MM-DD'
+    four_weeks_ago_str = four_weeks_ago.strftime('%Y-%m-%d')
     connection = getdb()
     cursor = connection.cursor()
-    cursor.execute("SELECT user_id FROM randomized_group")
+    # SQL query to select user_ids where session_start is from 4 weeks from today
+    query = """
+        SELECT user_id
+        FROM randomized_group
+        WHERE DATE(session_start) = %s;
+    """
+    cursor.execute(query, (four_weeks_ago_str,))
     user_ids = [row[0] for row in cursor.fetchall()]
     cursor.close()
     # Return the list of user_ids
     return user_ids
+
+
+def get_w3_users():
+    # Calculate today's date
+    four_weeks_ago = datetime.now() - timedelta(weeks=4)  # Format as 'YYYY-MM-DD'
+    four_weeks_ago_str = four_weeks_ago.strftime('%Y-%m-%d')
+    connection = getdb()
+    cursor = connection.cursor()
+    # SQL query to select user_ids where session_start is from 4 weeks from today
+    query = """
+        SELECT user_id
+        FROM w3_randomized_group 
+        WHERE DATE(session_start) = %s;
+    """
+    cursor.execute(query, (four_weeks_ago_str,))
+    user_ids = [row[0] for row in cursor.fetchall()]
+    cursor.close()
+    # Return the list of user_ids
+    return user_ids
+
 
 def store_eligibility(user_id, criteria, passed, num_count):
     connection = getdb()
@@ -482,5 +521,29 @@ def store_eligibility(user_id, criteria, passed, num_count):
     DO UPDATE SET passed = EXCLUDED.passed;
     """, (user_id, criteria, passed, num_count))
     logging.info(f"Saved or updated eligibility check result: {user_id=}, {criteria=}, {passed=}, {num_count=}")
+    cursor.close()
+    connection.commit()
+
+
+def store_w3_randomized_group(user_id, w3_randomized_group, random_price, session_start):
+    logging.info(f"W3 randomized group update: {user_id=}, {w3_randomized_group=}, {random_price=}, {session_start=}")
+    sql_insert = """INSERT INTO w3_randomized_group (user_id, w3_randomized_group, random_price, session_start) 
+                    VALUES(%s, %s, %s, %s);"""
+    sql_update = """UPDATE w3_randomized_group 
+                    SET w3_randomized_group = %s, random_price = %s, session_start = %s 
+                    WHERE user_id = %s;"""
+    connection = getdb()
+    cursor = connection.cursor()
+    # Check if the user already exists in the database
+    cursor.execute("SELECT COUNT(*) FROM w3_randomized_group WHERE user_id=%s;", (user_id,))
+    count_exists = cursor.fetchone()[0]
+    if count_exists > 0:
+        # Update existing user
+        cursor.execute(sql_update, (w3_randomized_group, random_price, session_start, user_id))
+        logging.info(f"Randomized group updated successfully: {user_id=}")
+    else:
+        # Insert new user
+        cursor.execute(sql_insert, (user_id, w3_randomized_group, random_price, session_start))
+        logging.info(f"Randomized group inserted successfully: {user_id=}")
     cursor.close()
     connection.commit()

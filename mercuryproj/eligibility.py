@@ -26,9 +26,11 @@ import time
 from importlib.resources import files
 import json
 import os
+import io
 import logging
 import pandas as pd
 import tweepy
+from tweepy.errors import TweepyException, Unauthorized, BadRequest, Forbidden, NotFound, TooManyRequests
 from csv import writer
 from datetime import datetime as dt
 from platformdirs import user_data_dir
@@ -82,8 +84,26 @@ def save_user_info():
                 access_token_secret=access_token_secret,
                 return_type=dict
             )
+        except Unauthorized as e:
+            logging.error(f"Authentication failed for user_id={user_id}: {e}")
+            continue
+        except BadRequest as e:
+            logging.error(f"Bad request error for user_id={user_id}: {e}")
+            continue
+        except Forbidden as e:
+            logging.error(f"Forbidden error for user_id={user_id}: {e}")
+            continue
+        except NotFound as e:
+            logging.error(f"Resource not found for user_id={user_id}: {e}")
+            continue
+        except TooManyRequests as e:
+            logging.error(f"Rate limit exceeded for user_id={user_id}: {e}")
+            continue
+        except TweepyException as e:
+            logging.error(f"Tweepy error occurred for user_id={user_id}: {e}")
+            continue
         except Exception as e:
-            logging.error(f'Problem w/ making tweepy client for {user_id=}: {e}')
+            logging.error(f"Unexpected error creating Tweepy client for user_id={user_id}: {e}")
             continue
 
         try:
@@ -95,8 +115,8 @@ def save_user_info():
 
         try:
             data = response['data']
-        except Exception as e:
-            logging.error(f'Problem w/ indexing data: {e} for {user_id=}.')
+        except KeyError as e:
+            logging.error(f'Problem w/ indexing data: KeyError {e} for {user_id=}.')
             continue
 
         created_at_str = data['created_at'].replace("Z", "UTC")
@@ -104,7 +124,7 @@ def save_user_info():
         min_date = dt(2023, 11, 1)
 
         public_metrics = data['public_metrics']
-
+        # configuration file - date fixed
         if created_at_dt < min_date:
             logging.info(f"{user_id=}'s account created before Nov 1 2023")
             database.store_eligibility(user_id, "account_created", True, "na")
@@ -117,9 +137,12 @@ def save_user_info():
         if not os.path.exists(directory):
             logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
             os.mkdir(directory)
-        with open(f"{directory}/user_info.csv", 'a') as f:
-            writer_obj = writer(f)
-            writer_obj.writerow(row)
+        try:
+            with open(f"{directory}/user_info.csv", 'a') as f:
+                writer_obj = writer(f)
+                writer_obj.writerow(row)
+        except io.IOError as e:
+            logging.error(f"There was a problem writing to the file for {user_id=}.")
         logging.info(f'Saving user info for {user_id=} done!')
     logging.info(f'End saving user info')
 

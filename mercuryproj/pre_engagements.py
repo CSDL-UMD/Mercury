@@ -102,7 +102,7 @@ def pre_treatment_engagement():
             # Get the username of each user_id:
             client = tweepy.Client(bearer_token, return_type=dict)
             response = client.get_user(id=user_id)
-            if 'data' in response:      # this is way to do! keep this approach when data in response situation
+            if 'data' in response:
                 username = response['data']['username']
             else:
                 logging.error(f"No 'data' key for {user_id=}")
@@ -131,8 +131,24 @@ def pre_treatment_engagement():
                 response.raise_for_status()  # If HTTP error occurs, it will raise an HTTPError exception
                 tweets = response.json().get('data', [])
                 time.sleep(2)  # Wait for 2 seconds before making the next request
-            except requests.exceptions.RequestException as e:
-                logging.error(f"Error fetching engagement data for {user_id=}: {e}")
+            except requests.exceptions.HTTPError as e:
+                logging.error(f"HTTP error while fetching pre-engagement data for {user_id=}: {e}")
+                continue
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
+                    requests.exceptions.RequestException) as e:
+                logging.warning(f"Network error for {user_id=}: {e}. Retrying after 3 minutes.")
+                time.sleep(60 * 3)  # Sleep for 3 minutes before retrying
+                try:
+                    response = requests.get(search_url, headers=headers, params=query_params)
+                    response.raise_for_status()  # If HTTP error occurs, it will raise an HTTPError exception
+                    tweets = response.json().get('data', [])
+                    time.sleep(2)  # Wait for 2 seconds before making the next request
+                except (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
+                        requests.exceptions.RequestException) as retry_e:
+                    logging.error(f"Failed to fetch data for {user_id=} after retry: {retry_e}")
+                    continue
+            except Exception as e:
+                logging.error(f"Unexpected error while fetching pre-engagement data for {user_id=}: {e}")
                 continue  # Continue to process the next user (For error user_ids, collect data in the backend)
 
             # Save tweets to file
@@ -141,10 +157,17 @@ def pre_treatment_engagement():
                 logging.warning(f"Configuration dir {directory_engagement} does not exist. Creating it now.")
                 os.makedirs(directory_engagement, exist_ok=True)
 
-            file_path = os.path.join(directory_engagement, f"pre-engagements_{user_id}.json")
-            with open(file_path, 'w') as outfile:
-                json.dump(tweets, outfile, indent=4)
-                logging.info(f"Saved pre_treatment tweets for user: {user_id} to {file_path}")
+            try:
+                file_path = os.path.join(directory_engagement, f"pre-engagements_{user_id}.json")
+                with open(file_path, 'w') as outfile:
+                    json.dump(tweets, outfile, indent=4)
+                    logging.info(f"Saved pre_treatment tweets for user: {user_id} to {file_path}")
+            except OSError as e:
+                logging.error(f"File operation failed for {user_id=}: {e}")
+            except json.JSONDecodeError as e:
+                logging.error(f"Failed to encode pre_treatment tweets to JSON for {user_id=}: {e}")
+            except Exception as e:
+                logging.error(f"Unexpected error when saving pre_treatment tweets for {user_id=}: {e}")
 
             time.sleep(3)
 
@@ -205,9 +228,26 @@ def pre_treatment_engagement():
                     json.dump(arr, outfile, indent=4)
                     logging.info(f"Done collecting likes of {user_id=}")
                 except tweepy.TweepyException as e:
-                    logging.error(f"An error occurred while collecting likes for {user_id=}: {e}")
+                    logging.warning(f"Tweepy error for {user_id=}: {e}. Retrying after 3 minutes.")
+                    time.sleep(60 * 3)  # Sleep for 3 minutes before retrying
+                    try:
+                        arr = []
+                        for response in paginator.flatten(limit=70):
+                            if len(arr) < 71:
+                                arr.append(response)
+                            else:
+                                break
+                        json.dump(arr, outfile, indent=4)
+                        logging.info(f"Successfully collected pre-likes for {user_id=} after retry")
+                    except tweepy.TweepyException as retry_e:
+                        logging.error(f"Failed to collect pre-likes for {user_id=} after retry: {retry_e}")
+                        continue
+                except json.JSONDecodeError as e:
+                    logging.error(f"Failed to encode pre-likes to JSON for {user_id=}: {e}")
+                    continue
                 except Exception as e:
-                    logging.error(f"An unexpected error occurred while collecting likes for {user_id=}: {e}")
+                    logging.error(f"An unexpected error occurred while collecting pre-likes for {user_id=}: {e}")
+                    continue
 
             # Now parse the collected tweets and likes
             logging.info(f"Parsing pre-treatment engagement data for {user_id=}.")
@@ -337,7 +377,7 @@ def pre_treatment_engagement():
                 logging.info(
                     f"Eligibility updated successfully for {user_id=}, passed={passed}, count={engagement_count}")
             except Exception as e:
-                logging.error(f"Failed to update eligibility for {user_id=}: {e}")
+                logging.error(f"Failed to update eligibility in DB for {user_id=}: {e}")
 
         # After each chunk, wait for 15 minutes to respect the rate limit, but not after the last chunk
         if chunk_index < total_chunks:

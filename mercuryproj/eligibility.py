@@ -21,7 +21,6 @@ File Management:
 - Parsed data is stored in a separate directory for further analysis.
 - Eligibility results are saved and updated in the database.
 """
-
 import time
 from importlib.resources import files
 import json
@@ -30,9 +29,10 @@ import io
 import logging
 import pandas as pd
 import tweepy
-from tweepy.errors import TweepyException, Unauthorized, BadRequest, Forbidden, NotFound, TooManyRequests
+from tweepy.errors import TweepyException, Unauthorized, Forbidden
 from csv import writer
 from datetime import datetime as dt
+# from datetime import timedelta
 from platformdirs import user_data_dir
 import requests
 from requests_oauthlib import OAuth1
@@ -76,53 +76,36 @@ def save_user_info():
         access_token = access_token_response['access_token']
         access_token_secret = access_token_response['access_token_secret']
 
-        try:
-            client = tweepy.Client(
-                consumer_key=cred['key'],
-                consumer_secret=cred['key_secret'],
-                access_token=access_token,
-                access_token_secret=access_token_secret,
-                return_type=dict
-            )
-        except Unauthorized as e:
-            logging.error(f"Authentication failed for user_id={user_id}: {e}")
-            continue
-        except BadRequest as e:
-            logging.error(f"Bad request error for user_id={user_id}: {e}")
-            continue
-        except Forbidden as e:
-            logging.error(f"Forbidden error for user_id={user_id}: {e}")
-            continue
-        except NotFound as e:
-            logging.error(f"Resource not found for user_id={user_id}: {e}")
-            continue
-        except TooManyRequests as e:
-            logging.error(f"Rate limit exceeded for user_id={user_id}: {e}")
-            continue
-        except TweepyException as e:
-            logging.error(f"Tweepy error occurred for user_id={user_id}: {e}")
-            continue
-        except Exception as e:
-            logging.error(f"Unexpected error creating Tweepy client for user_id={user_id}: {e}")
-            continue
+        client = tweepy.Client(
+            consumer_key=cred['key'],
+            consumer_secret=cred['key_secret'],
+            access_token=access_token,
+            access_token_secret=access_token_secret,
+            return_type=dict
+        )
 
         try:
             user_fields = 'created_at,public_metrics'
             response = client.get_me(user_fields=user_fields)
+        except Unauthorized:
+            logging.error(f"Unauthorized: Authentication failed for {user_id=}")
+        except Forbidden:
+            logging.error(f"Forbidden: The request is understood, but it has been refused for {user_id=}")
+        except TweepyException as e:
+            logging.error(f"Twitter API error for {user_id=} getting self info: {e}")
         except Exception as e:
-            logging.error(f'Error in get_me() for {user_id=}: {e}. Skipping to the next user.')
-            continue
+            logging.error(f"Unexpected error for {user_id=} getting self info: {e}")
 
-        try:
+        if 'data' in response:
             data = response['data']
-        except KeyError as e:
-            logging.error(f'Problem w/ indexing data: KeyError {e} for {user_id=}.')
+        else:
+            logging.error(f"No 'data' key for {user_id=} in getting self info.")
             continue
 
         created_at_str = data['created_at'].replace("Z", "UTC")
         created_at_dt = dt.strptime(created_at_str, "%Y-%m-%dT%H:%M:%S.%f%Z")
         min_date = dt(2023, 11, 1)
-
+        # dt.now() - datetime.timedelta(days=60)
         public_metrics = data['public_metrics']
         # configuration file - date fixed
         if created_at_dt < min_date:
@@ -137,13 +120,21 @@ def save_user_info():
         if not os.path.exists(directory):
             logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
             os.mkdir(directory)
+        file_path = os.path.join(directory, "user_info.csv")
         try:
-            with open(f"{directory}/user_info.csv", 'a') as f:
+            with open(file_path, 'a', newline='') as f:
                 writer_obj = writer(f)
                 writer_obj.writerow(row)
-        except io.IOError as e:
-            logging.error(f"There was a problem writing to the file for {user_id=}.")
-        logging.info(f'Saving user info for {user_id=} done!')
+        except FileNotFoundError as e:
+            logging.error(f"File not found: {file_path} for {user_id=}: {e}")
+        except io.UnsupportedOperation as e:
+            logging.error(f"File mode error when writing user info to {file_path} for {user_id=}: {e}")
+        except OSError as e:
+            logging.error(f"IO error occurred when writing user info to {file_path} for {user_id=}: {e}")
+        except Exception as e:
+            logging.error(f"An unexpected error occurred when writing user info to {file_path} for {user_id=}: {e}")
+        finally:
+            logging.info(f'Saving user info for {user_id=} done!')
     logging.info(f'End saving user info')
 
 

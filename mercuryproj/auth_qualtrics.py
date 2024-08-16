@@ -313,14 +313,15 @@ def random70_mute():
                                    "name_with_handle": str})
     inventory = inventory.reset_index(drop=True)
 
+    # Ordering list by `followed_by` ultimately
     inventory_sorted = inventory.sort_values(
-        by=["followed_by", "total_engagement",  "exposure", "followers"],
+        by=["followed_by", "total_engagement", "exposure", "followers"],
         ascending=[False, False, False, False]
     )
-    # cutoff (95%) by `followed_by` (~434 accounts)
+    # Truncate the list: cutoff (95%) by `followed_by` (~434 accounts)
     reduced_inventory = inventory_sorted[:434]
 
-    # order by exposure per Option 2 (change this!!)
+    # Within the truncated list, re-order by `total_engagement`
     reordered_inventory = reduced_inventory.sort_values(
         by=["total_engagement", "followed_by", "exposure", "followers"],
         ascending=[False, False, False, False]

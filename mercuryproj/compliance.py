@@ -54,11 +54,13 @@ def check_mute_compliance():
 
     for user_id in user_ids:
         logging.info(f'Checking muting relationship for {user_id=}')
+
         response = database.get_access_token(user_id)
         access_token_response = response.get_json()
 
         if 'error' in access_token_response:
-            raise Exception(access_token_response['error'])
+            logging.error(f"Failed to get access token for {user_id=}: {access_token_response['error']}")
+            continue
 
         access_token = access_token_response['access_token']
         access_token_secret = access_token_response['access_token_secret']
@@ -73,15 +75,24 @@ def check_mute_compliance():
         url = 'https://api.twitter.com/2/users'
 
         # Get muted_accounts_for_{user_id}
-        # Load JSON data
-        directory = os.path.join(data_dir, "muting_job", "muted_accounts")
-        if not os.path.exists(directory):
-            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-            os.makedirs(directory, exist_ok=True)
-        with open(os.path.join(directory, f"muted_accounts_for_{user_id}.json"), 'r') as outfile:
-            data = json.load(outfile)
+        try:
+            directory = os.path.join(data_dir, "muting_job", "muted_accounts")
+            with open(os.path.join(directory, f"muted_accounts_for_{user_id}.json"), 'r') as outfile:
+                data = json.load(outfile)
+            target_user_list = [entry["target_user_id"] for entry in data]
+        except FileNotFoundError:
+            logging.error(f"Muted accounts file not found for {user_id=}")
+            continue
+        except json.JSONDecodeError:
+            logging.error(f"Invalid JSON in muted accounts file for {user_id=}")
+            continue
+        except OSError as e:
+            logging.error(f"I/O error occurred while reading muted accounts for {user_id=}: {str(e)}")
+            continue
+        except Exception as e:
+            logging.error(f"Unexpected error loading muted accounts for {user_id=}: {str(e)}")
+            continue
 
-        target_user_list = [entry["target_user_id"] for entry in data]
         # Considering endpoint limit: maximum 100, we chunk target_user_list
         chunk_size = 100
         chunks = [target_user_list[i:i + chunk_size] for i in range(0, len(target_user_list), chunk_size)]
@@ -103,20 +114,35 @@ def check_mute_compliance():
                     all_data.extend(users['data'])
                 else:
                     logging.error(f"{user_id=} error with status code {response.status_code} for chunk {index}")
-                    continue
-
+                    if response.status_code == 429:  # Too Many Requests
+                        logging.warning(f"Rate limit exceeded for {user_id=}. Waiting 15 minutes before retry.")
+                        time.sleep(900)  # Wait for 15 minutes
+                        response = requests.get(url, auth=auth, params=params)
+                        if response.status_code == 200:
+                            users = response.json()
+                            all_data.extend(users['data'])
+                            logging.info(f"Successfully retrieved data for {user_id=} after retry")
+                        else:
+                            logging.error(f"Retry failed for {user_id=} with status code {response.status_code}")
+                            continue
             except requests.exceptions.RequestException as e:
-                logging.error(f"Request failed for chunk {index}: {e}")
+                logging.error(f"Request failed for chunk {index} of {user_id=}: {e}")
                 continue
 
+        # Save compliance data
         directory = os.path.join(data_dir, "muting_job", "compliance")
         if not os.path.exists(directory):
             logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
             os.makedirs(directory, exist_ok=True)
         time_day = str(datetime.now().date())
-        with open(os.path.join(directory, f"{user_id}_{time_day}.json"), 'w', encoding='utf-8') as file:
-            json.dump(all_data, file, ensure_ascii=False, indent=4)
-        logging.info(f'Finished processing connection_status for {user_id=}')
+
+        try:
+            with open(os.path.join(directory, f"{user_id}_{time_day}.json"), 'w', encoding='utf-8') as file:
+                json.dump(all_data, file, ensure_ascii=False, indent=4)
+        except OSError as e:
+            logging.error(f"I/O error occurred while saving compliance data for {user_id=}: {str(e)}")
+        except Exception as e:
+            logging.error(f"Unexpected error while saving compliance data for {user_id=}: {str(e)}")
 
     time.sleep(10)
 
@@ -124,6 +150,7 @@ def check_mute_compliance():
     # Retrieve compliance files - Extract unique user IDs and their latest file
     directory = os.path.join(data_dir, "muting_job", "compliance")
     files = os.listdir(directory)
+
     user_files = {}
     for file_name in files:
         if file_name.endswith('.json'):
@@ -135,28 +162,42 @@ def check_mute_compliance():
     # Process the most recent file for each user ID
     for user_id, (file_name, _) in user_files.items():
         file_path = os.path.join(directory, file_name)
-        with open(file_path, 'r', encoding='utf-8') as file:
-            all_data = json.load(file)
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file:
+                all_data = json.load(file)
+        except json.JSONDecodeError as e:
+            logging.error(f"JSON decode error in the {file_name=}: {str(e)}")
+            continue
+        except IOError as e:
+            logging.error(f"I/O error while reading {file_name=}: {str(e)}")
+            continue
 
         # Apply the filtering and extracting logic here
         filtered_data = [user for user in all_data if
                          "connection_status" not in user or "muting" not in user["connection_status"]]
         # Append to a CSV file
         csv_file_path = os.path.join(directory, "compliance_report.csv")
-        with open(csv_file_path, 'a', newline='', encoding='utf-8') as csvfile:
-            fieldnames = ['file_user_id', 'target_user_id', 'target_username', 'time_day']
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            if os.stat(csv_file_path).st_size == 0:  # If file is empty, write header
-                writer.writeheader()
 
-            time_day = str(datetime.now().date())
-            for user in filtered_data:
-                writer.writerow({
-                    'file_user_id': user_id,
-                    'target_user_id': user.get('id'),
-                    'target_username': user.get('username'),
-                    'time_day': time_day
-                })
+        try:
+            with open(csv_file_path, 'a', newline='', encoding='utf-8') as csvfile:
+                fieldnames = ['file_user_id', 'target_user_id', 'target_username', 'time_day']
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                if os.stat(csv_file_path).st_size == 0:  # If file is empty, write header
+                    writer.writeheader()
+
+                time_day = str(datetime.now().date())
+                for user in filtered_data:
+                    writer.writerow({
+                        'file_user_id': user_id,
+                        'target_user_id': user.get('id'),
+                        'target_username': user.get('username'),
+                        'time_day': time_day
+                    })
+        except IOError as e:
+            logging.error(f"I/O error occurred while writing to CSV for {user_id=}: {str(e)}")
+        except csv.Error as e:
+            logging.error(f"CSV error occurred while processing data for {user_id=}: {str(e)}")
+
     logging.info(f'End mute compliance')
 
 

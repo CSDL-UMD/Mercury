@@ -376,6 +376,10 @@ def pre_treatment_engagement():
                 database.store_eligibility(user_id, "pre-treatment_engagement", passed, engagement_count)
                 logging.info(
                     f"Eligibility updated successfully for {user_id=}, passed={passed}, count={engagement_count}")
+                # Update w2_invitation table in the database
+                if engagement_count > 0:
+                    database.update_w2_invitation(user_id)
+
             except Exception as e:
                 logging.error(f"Failed to update eligibility in DB for {user_id=}: {e}")
 

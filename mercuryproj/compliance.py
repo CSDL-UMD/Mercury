@@ -31,33 +31,29 @@ if not os.path.exists(data_dir):
 
 def check_mute_compliance():
     """
-    Check mute compliance for users and generate a compliance report.
+    Check mute compliance for users who have completed muting or unmuting process.
 
     This function performs the following tasks:
-    1. Retrieves users who have completed the muting process (state "Done").
-        - Change needed: Muting_Done, or Unmuting_Done
+    1. Retrieves users who have completed either muting or unmuting process.
     2. For each user:
        a) Fetches their Twitter API access tokens.
-       b) Loads the list of accounts they were supposed to mute.
-       c) Chunks the list of accounts to be checked (maximum 100 per request).
-       d) For each chunk, sends a request to the Twitter API to check the current connection status.
-       e) Collects all the response data, including the connection status of each account.
-       f) Saves the raw response data to a JSON file for future reference.
-    3. Generates a compliance report, listing users who have unmuted accounts they were supposed to keep muted.
-    4. Saves raw muting data for each user for future reference.
-    5. Appends new compliance data to an ongoing CSV report.
+       b) Loads the list of accounts they were supposed to mute/unmute.
+       c) Checks the current connection status with those accounts.
+       d) Records any compliance violations in the database.
     """
 
-    # Retrieve mute state: compliance check only for "Muting_Done"
+    # Retrieve mute states for all users
     users_dict = database.get_mute_state()
     all_users_state = users_dict.get("users_state", [])
 
-    # Extract user_ids for users where state is "Muting_Done"
-    user_ids = [user_info["user_id"] for user_info in all_users_state if user_info["state"] == "Muting_Done"]
+    # Extract user_ids for users where state is "Muting_Done" or "Unmuting_Done"
+    user_ids = [user_info["user_id"] for user_info in all_users_state
+                if user_info["state"] in ["Muting_Done", "Unmuting_Done"]]
 
     for user_id in user_ids:
         logging.info(f'Checking muting relationship for {user_id=}')
 
+        # Fetch user's Twitter API access tokens
         response = database.get_access_token(user_id)
         access_token_response = response.get_json()
 
@@ -68,7 +64,7 @@ def check_mute_compliance():
         access_token = access_token_response['access_token']
         access_token_secret = access_token_response['access_token_secret']
 
-        # initialize OAuth
+        # Initialize OAuth for Twitter API
         auth = OAuth1(
             client_key=cred['key'],
             client_secret=cred['key_secret'],
@@ -77,7 +73,7 @@ def check_mute_compliance():
         )
         url = 'https://api.twitter.com/2/users'
 
-        # Get muted_accounts_for_{user_id}
+        # Load the list of accounts the user was supposed to mute/unmute
         try:
             directory = os.path.join(data_dir, "muting_job", "muted_accounts")
             with open(os.path.join(directory, f"muted_accounts_for_{user_id}.json"), 'r') as outfile:
@@ -103,6 +99,7 @@ def check_mute_compliance():
         # List to save the results
         all_data = []
 
+        # Check connection status for each chunk of target users
         for index, chunk in enumerate(chunks):
             params = {
                 'ids': ','.join(str(id) for id in chunk),
@@ -175,31 +172,33 @@ def check_mute_compliance():
             logging.error(f"I/O error while reading {file_name=}: {str(e)}")
             continue
 
-        # Apply the filtering and extracting logic here
-        filtered_data = [user for user in all_data if
-                         "connection_status" not in user or "muting" not in user["connection_status"]]
-        # Append to a CSV file
-        csv_file_path = os.path.join(directory, "compliance_report.csv")
+        # Get user's state (Muting_Done or Unmuting_Done)
+        user_state = next((user_info["state"] for user_info in all_users_state if user_info["user_id"] == user_id),
+                          None)
 
-        try:
-            with open(csv_file_path, 'a', newline='', encoding='utf-8') as csvfile:
-                fieldnames = ['file_user_id', 'target_user_id', 'target_username', 'time_day']
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                if os.stat(csv_file_path).st_size == 0:  # If file is empty, write header
-                    writer.writeheader()
+        if user_state is None:
+            raise ValueError(f"Could not find state for {user_id=}")
 
-                time_day = str(datetime.now().date())
-                for user in filtered_data:
-                    writer.writerow({
-                        'file_user_id': user_id,
-                        'target_user_id': user.get('id'),
-                        'target_username': user.get('username'),
-                        'time_day': time_day
-                    })
-        except IOError as e:
-            logging.error(f"I/O error occurred while writing to CSV for {user_id=}: {str(e)}")
-        except csv.Error as e:
-            logging.error(f"CSV error occurred while processing data for {user_id=}: {str(e)}")
+        # Process compliance data and record violations
+        vsid = database.get_vsid(user_id)
+
+        for user in all_data:
+            is_muting = "connection_status" in user and "muting" in user["connection_status"]
+
+            # Compliance violated, record in database
+            if (user_state == "Muting_Done" and not is_muting) or \
+                    (user_state == "Unmuting_Done" and is_muting):
+                database.record_compliance_violation(
+                    user_id=user_id,
+                    vsid=vsid,
+                    target_user_id=user['id'],
+                    target_username=user['username'],
+                    case_tag=user_state
+                )
+                logging.info(
+                    f"Recorded compliance violation for {user_id=}, target user: {user['username']}, case: {user_state}")
+
+        logging.info(f'Compliance check and recording completed for {user_id=}')
 
     logging.info(f'End mute compliance')
 

@@ -46,12 +46,13 @@ CREATE TABLE mute_group (
     state VARCHAR(255)
 );
 
-DROP TABLE IF EXISTS randomized_group;
+DROP TABLE IF EXISTS w2_randomized_group;
 
-CREATE TABLE randomized_group (
+CREATE TABLE w2_randomized_group (
     id SERIAL PRIMARY KEY,
     user_id VARCHAR(255),
-    randomized_group VARCHAR(255),
+    w2_randomized_group VARCHAR(255),
+    random_price NUMERIC,
     session_start TIMESTAMP
 );
 
@@ -64,41 +65,6 @@ CREATE TABLE mute_result (
     mute_result VARCHAR(255),
     timestamp TIMESTAMP,
     UNIQUE(user_id, target_user_id)
-);
-
-DROP TABLE IF EXISTS DM1;
-
-CREATE TABLE DM1 (
-    id SERIAL PRIMARY KEY,
-    user_id VARCHAR(255),
-    conversation_id VARCHAR(255),
-    event_id VARCHAR(255),
-    timestamp TIMESTAMP,
-    text_type VARCHAR(255)
-);
-
-DROP TABLE IF EXISTS DM2;
-
-CREATE TABLE DM2 (
-    id SERIAL PRIMARY KEY,
-    user_id VARCHAR(255),
-    conversation_id VARCHAR(255),
-    event_id VARCHAR(255),
-    timestamp TIMESTAMP,
-    text_type VARCHAR(255),
-    dm1_count VARCHAR(255)
-);
-
-DROP TABLE IF EXISTS DM3;
-
-CREATE TABLE DM3 (
-    id SERIAL PRIMARY KEY,
-    user_id VARCHAR(255),
-    conversation_id VARCHAR(255),
-    event_id VARCHAR(255),
-    timestamp TIMESTAMP,
-    text_type VARCHAR(255),
-    dm2_count VARCHAR(255)
 );
 
 DROP TABLE IF EXISTS eligibility;
@@ -175,4 +141,47 @@ CREATE TABLE exposure_table (
     other_unmuted_account1 VARCHAR(255),
     other_unmuted_account2 VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+DROP TABLE IF EXISTS w2_invitation;
+
+CREATE TABLE w2_invitation (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255),
+    vsid VARCHAR(255),
+    invitation_date DATE DEFAULT (CURRENT_DATE + INTERVAL '1 day')
+);
+
+DROP TABLE IF EXISTS w3_invitation;
+
+CREATE TABLE w3_invitation (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255),
+    vsid VARCHAR(255),
+    payment NUMERIC,
+    compliance BOOLEAN,
+    invitation_date DATE DEFAULT (CURRENT_DATE + INTERVAL '1 day')
+);
+
+DROP TABLE IF EXISTS w3_post_pay;
+
+CREATE TABLE w3_post_pay (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255),
+    vsid VARCHAR(255),
+    payment NUMERIC,
+    invitation_date DATE DEFAULT (CURRENT_DATE + INTERVAL '1 day')
+);
+
+DROP TABLE IF EXISTS compliance;
+
+CREATE TABLE compliance (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255),
+    vsid VARCHAR(255),
+    target_user_id VARCHAR(255),
+    target_username VARCHAR(255),
+    case_tag VARCHAR(50),
+    created_at DATE DEFAULT CURRENT_DATE
 );

@@ -164,6 +164,9 @@ def get_access_token(user_id):
 
 
 def save_exposure(user_id, followed_account1, followed_account2, other_muted_account1, other_muted_account2, other_unmuted_account1, other_unmuted_account2):
+    """
+    In auth_qualtrics.py, w2_exposure()
+    """
     # Connect to the database
     connection = getdb()
     cursor = connection.cursor()
@@ -183,6 +186,9 @@ def save_exposure(user_id, followed_account1, followed_account2, other_muted_acc
 
 
 def get_exposure(user_id):
+    """
+    In auth_qualtrics.py, w3_exposure()
+    """
     logging.info(f"Getting exposure data for {user_id=}")
     connection = getdb()
     cursor = connection.cursor()
@@ -214,6 +220,9 @@ def get_exposure(user_id):
 
 
 def store_follow_politifact(user_id, success, session_start):
+    """
+    In auth_qualtrics.py, follow_politifact()
+    """
     logging.info(f"Following Politifact account: {user_id=}, {session_start=}")
     sql_insert = """INSERT INTO following_politifact (user_id, success, session_start)
              VALUES(%s,%s,%s);"""
@@ -237,28 +246,34 @@ def store_follow_politifact(user_id, success, session_start):
     return jsonify(data=user_id)
 
 
-def store_w2_randomized_group(user_id, randomized_group, session_start):
-    logging.info(f"Randomized group update: {user_id=}, {randomized_group=}, {session_start=}")
-    sql_insert = """INSERT INTO randomized_group (user_id, randomized_group, session_start) VALUES(%s, %s, %s);"""
-    sql_update = """UPDATE randomized_group SET randomized_group = %s, session_start = %s WHERE user_id = %s;"""
+def store_w2_randomized_group(user_id, w2_randomized_group, random_price, session_start):
+    """
+    In auth_qualtrics.py, store_group()
+    """
+    logging.info(f"Randomized group update: {user_id=}, {w2_randomized_group=}, {session_start=}")
+    sql_insert = """INSERT INTO w2_randomized_group (user_id, w2_randomized_group, random_price, session_start) VALUES(%s, %s, %s, %s);"""
+    sql_update = """UPDATE w2_randomized_group SET w2_randomized_group = %s, random_price = %s, session_start = %s WHERE user_id = %s;"""
     connection = getdb()
     cursor = connection.cursor()
     # Check if the user already exists in the database
-    cursor.execute("SELECT COUNT(*) FROM randomized_group WHERE user_id=%s;", (user_id,))
+    cursor.execute("SELECT COUNT(*) FROM w2_randomized_group WHERE user_id=%s;", (user_id,))
     count_exists = cursor.fetchone()[0]
     if count_exists > 0:
         # Update existing user
-        cursor.execute(sql_update, (randomized_group, session_start, user_id))
+        cursor.execute(sql_update, (w2_randomized_group, random_price, session_start, user_id))
         logging.info(f"Randomized group updated successfully: {user_id=}")
     else:
         # Insert new user
-        cursor.execute(sql_insert, (user_id, randomized_group, session_start))
+        cursor.execute(sql_insert, (user_id, w2_randomized_group, random_price, session_start))
         logging.info(f"Randomized group inserted successfully: {user_id=}")
     cursor.close()
     connection.commit()
 
 
 def store_vsid(user_id, vsid):
+    """
+    In auth_qualtrics.py, store_vsid()
+    """
     logging.info(f"Store vsid: {user_id=}, {vsid=}")
     connection = getdb()
     cursor = connection.cursor()
@@ -281,6 +296,9 @@ def store_vsid(user_id, vsid):
 
 
 def update_w1_status(user_id, vsid, session_start):
+    """
+    In auth_qualtrics.py, store_w1_status()
+    """
     logging.info(f"Attempting to update W1 status of {user_id=}, {vsid=}")
     connection = getdb()
     cursor = connection.cursor()
@@ -305,16 +323,22 @@ def update_w1_status(user_id, vsid, session_start):
 
 
 def get_randomized_group(user_id):
+    """
+    In auth_qualtrics.py script, get_group()
+    """
     logging.info(f"Get randomized group for {user_id=}")
     connection = getdb()
     cursor = connection.cursor()
-    cursor.execute("SELECT randomized_group FROM randomized_group WHERE user_id=%s;", (user_id,))
+    cursor.execute("SELECT randomized_group FROM w2_randomized_group WHERE user_id=%s;", (user_id,))
     result = cursor.fetchone()[0]
     cursor.close()
     return result
 
 
 def store_mute_state(user_id, state):
+    """
+    In auth_qualtrics.py script, mute_group()
+    """
     logging.info(f"Store mute state for {user_id=}; {state=}")
     sql_insert = """INSERT INTO mute_group (user_id, state) VALUES(%s,%s);"""
     sql_update = """UPDATE mute_group SET state = %s WHERE user_id = %s;"""
@@ -337,21 +361,10 @@ def store_mute_state(user_id, state):
     return jsonify(data=user_id)
 
 
-def get_mute_result(user_id, target_user_id):
-    connection = getdb()
-    cursor = connection.cursor()
-    # user_id와 target_user_id 쌍에 해당하는 mute_result 값을 조회
-    cursor.execute("SELECT mute_result FROM mute_result WHERE user_id=%s AND target_user_id=%s;", (user_id, target_user_id))
-    result = cursor.fetchone()
-    cursor.close()
-    connection.commit()
-    if result is None:
-        return None
-    else:
-        return result[0]
-
-
 def get_mute_state():
+    """
+    In muting.py and unmuting.py scripts
+    """
     # Connect to the database and fetch state for all users where state is "New"
     connection = getdb()
     cursor = connection.cursor()
@@ -364,6 +377,9 @@ def get_mute_state():
 
 
 def store_mute_result(user_id, target_user_id, mute_result, timestamp):
+    """
+    In muting.py and unmuting.py scripts
+    """
     logging.info(f"Store {user_id=}'s mute result: {target_user_id=}, {mute_result=}, {timestamp=}")
     connection = getdb()
     cursor = connection.cursor()
@@ -381,6 +397,9 @@ def store_mute_result(user_id, target_user_id, mute_result, timestamp):
 
 
 def get_user_info(vsid):
+    """
+    In auth_qualtrics.py script, get_userid()
+    """
     logging.info(f"Get user information of {vsid=}")
     connection = getdb()
     cursor = connection.cursor()
@@ -393,6 +412,9 @@ def get_user_info(vsid):
 
 
 def get_w1_session_start(user_id):
+    """
+    In pre_engagements.py script
+    """
     connection = getdb()
     cursor = connection.cursor()
     query = """
@@ -407,11 +429,14 @@ def get_w1_session_start(user_id):
 
 
 def get_w2_session_start(user_id):
+    """
+    In post_engagements.py script
+    """
     connection = getdb()
     cursor = connection.cursor()
     query = """
         SELECT session_start
-        FROM randomized_group
+        FROM w2_randomized_group
         WHERE user_id = %s;
     """
     cursor.execute(query, (user_id,))
@@ -421,6 +446,9 @@ def get_w2_session_start(user_id):
 
 
 def get_w3_session_start(user_id):
+    """
+    In post_endline_engagements.py script
+    """
     connection = getdb()
     cursor = connection.cursor()
     query = """
@@ -434,17 +462,10 @@ def get_w3_session_start(user_id):
     return session_start
 
 
-def get_all_users():
-    connection = getdb()
-    cursor = connection.cursor()
-    cursor.execute("SELECT user_id FROM users_for_elig_test")
-    user_ids = [row[0] for row in cursor.fetchall()]
-    cursor.close()
-    # Return the list of user_ids
-    return user_ids
-
-
 def get_w1_users():
+    """
+    In eligibility.py script
+    """
     # Calculate yesterday's date
     yesterday = datetime.now() - timedelta(days=1)
     yesterday_str = yesterday.strftime('%Y-%m-%d')  # Format as 'YYYY-MM-DD'
@@ -463,26 +484,18 @@ def get_w1_users():
     return user_ids
 
 
-def get_eligible_users():
-    connection = getdb()
-    cursor = connection.cursor()
-    cursor.execute("SELECT user_id FROM eligible_users")
-    user_ids = [row[0] for row in cursor.fetchall()]
-    cursor.close()
-    # Return the list of user_ids
-    return user_ids
-
-
 def get_w2_users():
-    # Calculate today's date
+    """
+    In post_engagements.py, post_treatment_engagement()
+    """
     four_weeks_ago = datetime.now() - timedelta(days=1) - timedelta(weeks=4)  # Format as 'YYYY-MM-DD'
     four_weeks_ago_str = four_weeks_ago.strftime('%Y-%m-%d')
     connection = getdb()
     cursor = connection.cursor()
-    # SQL query to select user_ids where session_start is from 4 weeks from today
+    # SQL query to select user_ids where session_start is from 4 weeks from yesterday
     query = """
         SELECT user_id
-        FROM randomized_group
+        FROM w2_randomized_group
         WHERE DATE(session_start) = %s;
     """
     cursor.execute(query, (four_weeks_ago_str,))
@@ -493,6 +506,9 @@ def get_w2_users():
 
 
 def get_w3_users():
+    """
+    In post_endline_engagements.py, post_endline_engagement()
+    """
     # Calculate today's date
     four_weeks_ago = datetime.now() - timedelta(weeks=4)  # Format as 'YYYY-MM-DD'
     four_weeks_ago_str = four_weeks_ago.strftime('%Y-%m-%d')
@@ -512,6 +528,9 @@ def get_w3_users():
 
 
 def store_eligibility(user_id, criteria, passed, num_count):
+    """
+    eligibility.py and pre_engagements.py
+    """
     connection = getdb()
     cursor = connection.cursor()
     cursor.execute("""
@@ -526,6 +545,9 @@ def store_eligibility(user_id, criteria, passed, num_count):
 
 
 def store_w3_randomized_group(user_id, w3_randomized_group, random_price, session_start):
+    """
+    In auth_qualtrics.py script, store_w3_group()
+    """
     logging.info(f"W3 randomized group update: {user_id=}, {w3_randomized_group=}, {random_price=}, {session_start=}")
     sql_insert = """INSERT INTO w3_randomized_group (user_id, w3_randomized_group, random_price, session_start) 
                     VALUES(%s, %s, %s, %s);"""
@@ -547,3 +569,203 @@ def store_w3_randomized_group(user_id, w3_randomized_group, random_price, sessio
         logging.info(f"Randomized group inserted successfully: {user_id=}")
     cursor.close()
     connection.commit()
+
+
+def get_vsid(user_id):
+    """
+    Needed when updating invitation tables
+    """
+    connection = getdb()
+    cursor = connection.cursor()
+    cursor.execute("SELECT vsid FROM mercury_user WHERE user_id=%s;", (user_id,))
+    result = cursor.fetchone()
+    if result:
+        vsid = result[0]
+        return vsid
+    cursor.close()
+
+
+def update_w2_invitation(user_id):
+    """
+    In pre_engagements.py script, this is called if user_id has non-zero engagement.
+    This function fetches the vsid and updates W2 Invitation if eligibility criteria are met.
+    """
+    logging.info(f"Updating W2 Invitation only for those who passed eligibility criteria")
+    connection = getdb()
+    cursor = connection.cursor()
+    try:
+        # Fetch vsid from mercury_user table
+        fetch_vsid_sql = """
+        SELECT vsid FROM mercury_user WHERE user_id = %s
+        """
+        cursor.execute(fetch_vsid_sql, (user_id,))
+        vsid_result = cursor.fetchone()
+
+        if not vsid_result:
+            logging.info(f"No vsid found for user_id: {user_id}. Skipping W2 Invitation update.")
+            return
+
+        vsid = vsid_result[0]
+
+        # Check eligibility
+        check_eligibility_sql = """
+        SELECT passed FROM eligibility 
+        WHERE user_id = %s AND criteria = 'account_created'
+        """
+        cursor.execute(check_eligibility_sql, (user_id,))
+        result = cursor.fetchone()
+
+        # Insert into w2_invitation table only if the condition is met
+        if result and result[0]:  # result[0] is the value of the 'passed' column
+            sql_insert = """
+            INSERT INTO w2_invitation (user_id, vsid) 
+            VALUES (%s, %s)
+            """
+            cursor.execute(sql_insert, (user_id, vsid))
+            logging.info(f"W2 Invitation updated for user_id: {user_id}")
+        else:
+            logging.info(f"Account creation date not met for user_id: {user_id}. Skipping W2 Invitation update.")
+        connection.commit()
+    except Exception as e:
+        logging.error(f"Error updating W2 Invitation: {str(e)}")
+    finally:
+        cursor.close()
+
+
+def update_w3_invitation(user_id):
+    """
+    Update W3 Invitation Table
+    """
+    logging.info(f"Updating W3 Invitation for {user_id=}")
+    connection = getdb()
+    cursor = connection.cursor()
+
+    try:
+        # Fetch vsid from mercury_user table
+        vsid_query = "SELECT vsid FROM mercury_user WHERE user_id = %s"
+        cursor.execute(vsid_query, (user_id,))
+        vsid_result = cursor.fetchone()
+
+        if not vsid_result:
+            logging.info(f"No vsid found for user_id: {user_id}. Skipping W3 Invitation update.")
+            return
+
+        vsid = vsid_result[0]
+
+        # Fetch random_price from w2_randomized_group table
+        price_query = "SELECT random_price FROM w2_randomized_group WHERE user_id = %s"
+        cursor.execute(price_query, (user_id,))
+        price_result = cursor.fetchone()
+
+        if not price_result:
+            logging.info(f"No random price found for user_id: {user_id}. Skipping W3 Invitation update.")
+            return
+
+        payment = price_result[0]
+
+        # Check if user exists in compliance table
+        compliance_query = "SELECT 1 FROM compliance WHERE user_id = %s"
+        cursor.execute(compliance_query, (user_id,))
+        compliance_result = cursor.fetchone()
+
+        compliance = compliance_result is None
+
+        # Insert into w3_invitation table if conditions are met
+        if compliance:
+            insert_query = """
+            INSERT INTO w3_invitation (user_id, vsid, payment, compliance)
+            VALUES (%s, %s, %s, %s)
+            """
+            cursor.execute(insert_query, (user_id, vsid, payment, compliance))
+            connection.commit()
+            logging.info(f"W3 Invitation updated for {user_id=}")
+        else:
+            logging.info(f"{user_id=} exists in compliance table. Skipping W3 Invitation update.")
+
+    except Exception as e:
+        logging.error(f"Error updating W3 Invitation: {str(e)}")
+
+    finally:
+        cursor.close()
+
+
+def update_w3_post_pay(user_id):
+    """
+    Update Post-W3 Payment Table
+    """
+    logging.info(f"Updating Post-W3 payment info for {user_id=}")
+    connection = getdb()
+    cursor = connection.cursor()
+
+    try:
+        # Fetch vsid from mercury_user table
+        vsid_query = "SELECT vsid FROM mercury_user WHERE user_id = %s"
+        cursor.execute(vsid_query, (user_id,))
+        vsid_result = cursor.fetchone()
+
+        if not vsid_result:
+            logging.info(f"No vsid found for user_id: {user_id}. Skipping W3 post-pay update.")
+            return
+
+        vsid = vsid_result[0]
+
+        # Fetch random_price from w3_randomized_group table
+        price_query = "SELECT random_price FROM w3_randomized_group WHERE user_id = %s"
+        cursor.execute(price_query, (user_id,))
+        price_result = cursor.fetchone()
+
+        if not price_result:
+            logging.info(f"No random price found for user_id: {user_id}. Skipping update.")
+            return
+
+        payment = price_result[0]
+
+        # Insert into w3_post_pay table if conditions are met
+
+        insert_query = """
+        INSERT INTO w3_post_pay (user_id, vsid, payment)
+        VALUES (%s, %s, %s)
+        """
+        cursor.execute(insert_query, (user_id, vsid, payment))
+        connection.commit()
+        logging.info(f"Post-W3 payment info updated for {user_id=}")
+
+    except Exception as e:
+        logging.error(f"Error updating W3 Invitation: {str(e)}")
+
+    finally:
+        cursor.close()
+
+
+def record_compliance_violation(user_id, vsid, target_user_id, target_username, case_tag):
+    """
+    Record a compliance violation in the database.
+
+    Args:
+    user_id (str): The ID of the user who violated compliance.
+    vsid (str): The VSID of the user.
+    target_user_id (str): The ID of the target user involved in the violation.
+    target_username (str): The username of the target user.
+    time_day (str): The date of the violation check.
+    case_tag (str): The type of violation (e.g., "Muting_Done" or "Unmuting_Done").
+
+    Returns: None
+    """
+    logging.info(f"Recording compliance violation for {user_id=}, target user: {target_username}, case_tag: {case_tag}")
+
+    sql_insert = """
+    INSERT INTO compliance (user_id, vsid, target_user_id, target_username, case_tag)
+    VALUES (%s, %s, %s, %s, %s);
+    """
+
+    connection = getdb()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute(sql_insert, (user_id, vsid, target_user_id, target_username, case_tag))
+        connection.commit()
+        logging.info(f"Compliance violation recorded successfully for {user_id=}")
+    except Exception as e:
+        logging.error(f"Error recording compliance violation for {user_id=}: {str(e)}")
+    finally:
+        cursor.close()

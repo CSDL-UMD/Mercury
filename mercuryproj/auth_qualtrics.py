@@ -281,7 +281,8 @@ def store_group():
     along with the current timestamp.
     """
     user_id = request.args.get("user_id").strip()
-    randomized_group = request.args.get("group").strip()
+    w2_randomized_group = request.args.get("group").strip()
+    random_price = request.args.get("random_price").strip()
 
     # Get current timestamp
     current_timestamp = datetime.now().isoformat()
@@ -289,7 +290,8 @@ def store_group():
     # store in DB:
     insert_group_payload = {
         "user_id": user_id,
-        "randomized_group": randomized_group,
+        "w2_randomized_group": w2_randomized_group,
+        "random_price":  random_price,
         "session_start": current_timestamp
     }
     database.store_w2_randomized_group(**insert_group_payload)
@@ -388,7 +390,6 @@ def get_group():
     """
     wave 3
     """
-    # XXX do the same in other functions -GLC
     if "user_id" in request.args:
         user_id = request.args.get("user_id").strip()
     else:

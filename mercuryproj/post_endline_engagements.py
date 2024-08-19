@@ -466,6 +466,8 @@ def post_endline_engagement():
                 json.dump(matches, parsed_file, indent=4)
                 logging.info(f"Saved parsed pre-endline engagements and likes for {user_id=}")
 
+            # Update w3_post_pay table in the database
+            database.update_w3_post_pay(user_id)
         # After each chunk, wait for 15 minutes to respect the rate limit
         logging.info(f"Processed 300 users, sleeping for ~15 minutes to respect the rate limit.")
         time.sleep(16 * 60)  # Sleep for 16 minutes

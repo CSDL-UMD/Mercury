@@ -468,6 +468,9 @@ def post_treatment_engagement():
                 json.dump(matches, parsed_file, indent=4)
                 logging.info(f"Saved parsed post-treatment engagements and likes for {user_id=}")
 
+            # Update w3_invitation table in the database
+            database.update_w3_invitation(user_id)
+
         # After each chunk, wait for 15 minutes to respect the rate limit
         logging.info(f"Processed 300 users, sleeping for ~15 minutes to respect the rate limit.")
         time.sleep(16 * 60)  # Sleep for 16 minutes

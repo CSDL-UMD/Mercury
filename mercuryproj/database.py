@@ -474,12 +474,11 @@ def get_eligible_users():
 
 
 def get_w2_users():
-    # Calculate today's date
     four_weeks_ago = datetime.now() - timedelta(days=1) - timedelta(weeks=4)  # Format as 'YYYY-MM-DD'
     four_weeks_ago_str = four_weeks_ago.strftime('%Y-%m-%d')
     connection = getdb()
     cursor = connection.cursor()
-    # SQL query to select user_ids where session_start is from 4 weeks from today
+    # SQL query to select user_ids where session_start is from 4 weeks from yesterday
     query = """
         SELECT user_id
         FROM randomized_group

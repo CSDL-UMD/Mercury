@@ -203,7 +203,7 @@ def main():
             time.sleep(15 * 60)
 
         for user_id in mute_users:
-            database.store_mute_state(user_id=user_id, state="Done")
+            database.store_mute_state(user_id=user_id, state="Muting_Done")
             logging.info(f"Muting job for {user_id=} is done!")
 
 

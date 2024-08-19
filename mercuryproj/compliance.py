@@ -35,6 +35,7 @@ def check_mute_compliance():
 
     This function performs the following tasks:
     1. Retrieves users who have completed the muting process (state "Done").
+        - Change needed: Muting_Done, or Unmuting_Done
     2. For each user:
        a) Fetches their Twitter API access tokens.
        b) Loads the list of accounts they were supposed to mute.
@@ -47,12 +48,12 @@ def check_mute_compliance():
     5. Appends new compliance data to an ongoing CSV report.
     """
 
-    # Retrieve mute state: compliance check only for "Done"
+    # Retrieve mute state: compliance check only for "Muting_Done"
     users_dict = database.get_mute_state()
     all_users_state = users_dict.get("users_state", [])
 
-    # Extract user_ids for users where state is "Done"
-    user_ids = [user_info["user_id"] for user_info in all_users_state if user_info["state"] == "Done"]
+    # Extract user_ids for users where state is "Muting_Done"
+    user_ids = [user_info["user_id"] for user_info in all_users_state if user_info["state"] == "Muting_Done"]
 
     for user_id in user_ids:
         logging.info(f'Checking muting relationship for {user_id=}')

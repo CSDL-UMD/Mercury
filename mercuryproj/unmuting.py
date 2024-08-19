@@ -194,7 +194,7 @@ def main():
             time.sleep(15 * 60)
 
         for user_id in unmute_users:
-            database.store_mute_state(user_id=user_id, state="Done")
+            database.store_mute_state(user_id=user_id, state="Unmute_Done")
             logging.info(f"Unmuting job for {user_id=} is done!")
 
 

@@ -470,7 +470,7 @@ def w2_exposure():
         user_id = request.args.get("user_id").strip()
     else:
         abort(500, "No user_id specified. Aborting.")
-    logging.info(f"Getting exposure of {user_id=}")
+    logging.info(f"Getting w2 exposure of {user_id=}")
 
     # Top 20 with most `followed_by` in the pilot
     top_20 = ["RealAlexJones", "infowars", "TuckerCarlson", "FoxNews",
@@ -481,11 +481,22 @@ def w2_exposure():
 
     # Load inventory with target user ids
     inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")),
-                            dtype={"target_user_id": str, "twitter_handle": str, "name_with_handle": str})
-    inventory_sorted = inventory.sort_values(by="followed_by", ascending=False)
+                            dtype={"target_user_id": str, "twitter_handle": str,
+                                   "followers": int, "exposure": int, "followed_by": int,
+                                   "total_engagement": int, "name": str,
+                                   "name_with_handle": str})
+    inventory = inventory.reset_index(drop=True)
 
+    # Ordering list by `followed_by` ultimately
+    inventory_sorted = inventory.sort_values(
+        by=["followed_by", "total_engagement", "exposure", "followers"],
+        ascending=[False, False, False, False]
+    )
     # Map twitter_handles to name_with_handles
     handle_to_name_with_handle = dict(zip(inventory_sorted["twitter_handle"], inventory_sorted["name_with_handle"]))
+
+    # Map target_user_id to twitter_handle
+    id_to_handle = dict(zip(inventory_sorted["target_user_id"], inventory_sorted["twitter_handle"]))
 
     # Load the muted accounts data
     muted_accounts_directory = f"{data_dir}/muting_job/muted_accounts"
@@ -494,80 +505,83 @@ def w2_exposure():
     try:
         with open(muted_accounts_file, 'r') as file:
             muted_data = json.load(file)
+            muted_handles = set(account['twitter_handle'] for account in muted_data)
+    except FileNotFoundError:
+        logging.error(f"Muted accounts file not found for {user_id=}. Using fallback method.")
+        muted_handles = set(top_20)
+    except json.JSONDecodeError:
+        logging.error(f"JSON decoding error for muted accounts file of {user_id=}. Using fallback method.")
+        muted_handles = set(top_20)
     except Exception as e:
-        logging.error(f"Error reading muted accounts file for {user_id=}: {str(e)}")
-        # Just choose top 4
-        muted_data = [{"twitter_handle": handle} for handle in top_20[:4]]
+        logging.error(f"Unexpected error reading muted accounts file for {user_id=}: {str(e)}. Using fallback method.")
+        muted_handles = set(top_20)
 
-    # Load connection status data
-    connection_status_directory = f"{data_dir}/eligibility/connection_status"
-    follow_status_file = os.path.join(connection_status_directory, f"Connection_status_{user_id}.json")
-
+    # Load pre-treatment engagement data
+    engagement_file = os.path.join(data_dir, "matched_files", f"pre-treatment_totalengagements_{user_id}.json")
     try:
-        with open(follow_status_file, 'r') as file:
-            follow_status_data = json.load(file)
+        with open(engagement_file, 'r') as file:
+            engagement_data = json.load(file)
     except Exception as e:
-        logging.error(f"Error reading connection status file for {user_id=}: {str(e)}")
-        follow_status_data = []
+        logging.error(f"Error reading engagement file for {user_id=}: {str(e)}")
+        engagement_data = []
 
-    # Initialize
-    followed_lq_account_usernames = []
+    # Get unique engaged target_user_ids
+    engaged_target_ids = set(engagement['target_user_id'] for engagement in engagement_data)
 
-    # Loop through the list
-    for username in follow_status_data:
-        # Check if 'connection_status' exists and contains 'following'
-        if 'connection_status' in username and 'following' in username['connection_status']:
-            # If condition is met, append the 'username' to author_ids
-            followed_lq_account_usernames.append(username['username'])
+    # Match engaged_target_ids with corresponding twitter_handle
+    engaged_handles = [id_to_handle.get(target_id, '') for target_id in engaged_target_ids if
+                       id_to_handle.get(target_id, '')]
+    engaged_handles = [handle for handle in inventory_sorted['twitter_handle'] if handle in engaged_handles]
 
-    # replace all_handles_str with name_with_handle
-    followed_lq_account_usernames = [handle_to_name_with_handle.get(handle, "") for handle in followed_lq_account_usernames]
+    # Separate muted and unmuted accounts
+    muted_engaged = [handle for handle in engaged_handles if handle in muted_handles]
+    unmuted_engaged = [handle for handle in engaged_handles if handle not in muted_handles]
 
-    # If there are less than two followed LQ accounts, put '0'
-    while len(followed_lq_account_usernames) < 2:
-        followed_lq_account_usernames.append('0')
+    # Helper function to get accounts
+    def get_accounts(engaged, all_accounts, count):
+        accounts = []
 
-    # Followed_LQ_account_usernames: max. 2 accounts
-    followed_lq_account_usernames = followed_lq_account_usernames[:2]
+        # Step 1: Add the first engaged account that is in all_accounts
+        for handle in engaged:
+            if handle in all_accounts:
+                accounts.append(handle)
+                break
 
-    # Remove followed LQ account from top 20
-    top_20 = [account for account in top_20 if account not in followed_lq_account_usernames]
+        # If no engaged account was added, move to Step 2
+        if not accounts:
+            # Step 2: Remove engaged accounts from top_20 and select the top n
+            available_top_20 = [handle for handle in top_20 if handle in all_accounts and handle not in engaged]
+            accounts.extend(available_top_20[:count])
+        else:
+            # If an engaged account was added, fill the rest with non-engaged top accounts
+            remaining_count = count - len(accounts)
+            available_top_20 = [handle for handle in top_20 if handle in all_accounts and handle not in engaged]
+            accounts.extend(available_top_20[:remaining_count])
 
-    # Muted and Unmuted LQ accounts
-    muted_top_accounts = [account['twitter_handle'] for account in muted_data if account['twitter_handle'] in top_20]
+        # If we still don't have enough accounts, add from the remaining all_accounts
+        if len(accounts) < count:
+            remaining_accounts = [handle for handle in all_accounts if handle not in accounts and handle not in engaged]
+            accounts.extend(remaining_accounts[:count - len(accounts)])
 
-    unmuted_top_accounts = [account for account in top_20 if account not in muted_top_accounts]
+        return accounts[:count]
 
-    # Choose max. 2 accounts
-    other_muted_accounts = muted_top_accounts[:2]
-    other_unmuted_accounts = unmuted_top_accounts[:2]
+    # Usage in the main function:
+    muted_accounts = get_accounts(muted_engaged, muted_handles, 3)
+    unmuted_accounts = get_accounts(unmuted_engaged, set(inventory_sorted['twitter_handle']) - muted_handles, 3)
 
-    # If we don't have 2 unmuted accounts from top 20, look in the rest of the inventory
-    if len(other_unmuted_accounts) < 2:
-        available_accounts = [account for account in inventory_sorted['twitter_handle']
-                              if account not in [acc['twitter_handle'] for acc in muted_data]
-                              and account not in top_20]
-
-        # Add accounts from available_accounts until we have 2
-        other_unmuted_accounts.extend(available_accounts[:2 - len(other_unmuted_accounts)])
-
-    # replace all_handles_str with name_with_handle
-    other_muted_accounts = [handle_to_name_with_handle.get(handle, "") for handle in other_muted_accounts]
-    other_unmuted_accounts = [handle_to_name_with_handle.get(handle, "") for handle in other_unmuted_accounts]
-
-    # Concatenate all selected handles
-    all_handles = followed_lq_account_usernames + other_muted_accounts + other_unmuted_accounts
-    all_handles_str = [str(handle) for handle in all_handles]  # Ensure all handles are strings
-
+    # Prepare result for database storage
+    all_handles_str = [
+        handle_to_name_with_handle.get(handle, '') for handle in muted_accounts + unmuted_accounts
+    ]
     # store in DB:
     insert_group_payload = {
         "user_id": user_id,
-        "followed_account1": all_handles_str[0],
-        "followed_account2": all_handles_str[1],
-        "other_muted_account1": all_handles_str[2],
-        "other_muted_account2": all_handles_str[3],
-        "other_unmuted_account1": all_handles_str[4],
-        "other_unmuted_account2": all_handles_str[5]
+        "muted_account1": all_handles_str[0],
+        "muted_account2": all_handles_str[1],
+        "muted_account3": all_handles_str[2],
+        "unmuted_account1": all_handles_str[3],
+        "unmuted_account2": all_handles_str[4],
+        "unmuted_account3": all_handles_str[5]
     }
     database.save_exposure(**insert_group_payload)
     return "$$$".join(all_handles_str)
@@ -578,7 +592,8 @@ def w3_exposure():
     """
     Wave 3 exposure question
     - Load the exposure data saved from Wave 2
-    - Return the same followed_account1, 2; other_muted_account1, 2; other_unmuted_account1, 2
+    - If loading fails, generate new data using w2_exposure logic
+    - Return the muted_account1~3, unmuted_account1~3
     """
     if "user_id" in request.args:
         user_id = request.args.get("user_id").strip()
@@ -591,23 +606,98 @@ def w3_exposure():
         # Load the exposure data from the database
         exposure_data = database.get_exposure(user_id)
 
-        if exposure_data is None:
-            logging.error(f"No exposure data found for {user_id=}")
+        if exposure_data is not None:
+            # Extract the accounts
+            all_handles = [
+                exposure_data['muted_account1'],
+                exposure_data['muted_account2'],
+                exposure_data['muted_account3'],
+                exposure_data['unmuted_account1'],
+                exposure_data['unmuted_account2'],
+                exposure_data['unmuted_account3']
+            ]
+            # Convert to string and join
+            all_handles_str = [str(handle) for handle in all_handles]
+            result = "$$$".join(all_handles_str)
+            return result
 
-        # Extract the accounts
-        all_handles = [
-            exposure_data['followed_account1'],
-            exposure_data['followed_account2'],
-            exposure_data['other_muted_account1'],
-            exposure_data['other_muted_account2'],
-            exposure_data['other_unmuted_account1'],
-            exposure_data['other_unmuted_account2']
-        ]
+        else:
+            logging.warning(f"No exposure data found for {user_id=}. Generating new data using w2_exposure logic.")
+            # w2_exposure logic starts here
+            top_20 = ["RealAlexJones", "infowars", "TuckerCarlson", "FoxNews",
+                      "DonaldJTrumpJr", "seanhannity", "DineshDSouza",
+                      "marklevinshow", "NEWSMAX", "MSNBC", "IngrahamAngle",
+                      "catturd2", "JudicialWatch", "OANN", "scrowder", "bennyjohnson",
+                      "hodgetwins", "TomFitton", "charliekirk11", "Franklin_Graham"]
 
-        # Convert to string and join
-        all_handles_str = [str(handle) for handle in all_handles]
-        result = "$$$".join(all_handles_str)
-        return result
+            # Load inventory with target user ids
+            inventory = pd.read_csv(str(files("mercuryproj.data").joinpath("updated_inventory.csv")),
+                                    dtype={"target_user_id": str, "twitter_handle": str,
+                                           "followers": int, "exposure": int, "followed_by": int,
+                                           "total_engagement": int, "name": str,
+                                           "name_with_handle": str})
+            inventory_sorted = inventory.sort_values(
+                by=["followed_by", "total_engagement", "exposure", "followers"],
+                ascending=[False, False, False, False]
+            )
+            handle_to_name_with_handle = dict(
+                zip(inventory_sorted["twitter_handle"], inventory_sorted["name_with_handle"]))
+            id_to_handle = dict(zip(inventory_sorted["target_user_id"], inventory_sorted["twitter_handle"]))
+
+            # Load the muted accounts data
+            muted_accounts_directory = f"{data_dir}/muting_job/muted_accounts"
+            muted_accounts_file = os.path.join(muted_accounts_directory, f"muted_accounts_for_{user_id}.json")
+
+            try:
+                with open(muted_accounts_file, 'r') as file:
+                    muted_data = json.load(file)
+                    muted_handles = set(account['twitter_handle'] for account in muted_data)
+            except Exception as e:
+                logging.error(f"Error reading muted accounts file for {user_id=}: {str(e)}. Using fallback method.")
+                muted_handles = set(top_20)
+
+            # Load pre-treatment engagement data
+            engagement_file = os.path.join(data_dir, "matched_files", f"pre-treatment_totalengagements_{user_id}.json")
+            try:
+                with open(engagement_file, 'r') as file:
+                    engagement_data = json.load(file)
+            except Exception as e:
+                logging.error(f"Error reading engagement file for {user_id=}: {str(e)}")
+                engagement_data = []
+
+            engaged_target_ids = set(engagement['target_user_id'] for engagement in engagement_data)
+            engaged_handles = [id_to_handle.get(target_id, '') for target_id in engaged_target_ids if
+                               id_to_handle.get(target_id, '')]
+            engaged_handles = [handle for handle in inventory_sorted['twitter_handle'] if handle in engaged_handles]
+
+            muted_engaged = [handle for handle in engaged_handles if handle in muted_handles]
+            unmuted_engaged = [handle for handle in engaged_handles if handle not in muted_handles]
+
+            def get_accounts(engaged, all_accounts, count):
+                accounts = []
+                for handle in engaged:
+                    if handle in all_accounts:
+                        accounts.append(handle)
+                        break
+                if not accounts:
+                    available_top_20 = [handle for handle in top_20 if handle in all_accounts and handle not in engaged]
+                    accounts.extend(available_top_20[:count])
+                else:
+                    remaining_count = count - len(accounts)
+                    available_top_20 = [handle for handle in top_20 if handle in all_accounts and handle not in engaged]
+                    accounts.extend(available_top_20[:remaining_count])
+                if len(accounts) < count:
+                    remaining_accounts = [handle for handle in all_accounts if
+                                          handle not in accounts and handle not in engaged]
+                    accounts.extend(remaining_accounts[:count - len(accounts)])
+                return accounts[:count]
+
+            muted_accounts = get_accounts(muted_engaged, muted_handles, 3)
+            unmuted_accounts = get_accounts(unmuted_engaged, set(inventory_sorted['twitter_handle']) - muted_handles, 3)
+
+            all_handles_str = [handle_to_name_with_handle.get(handle, '') for handle in
+                               muted_accounts + unmuted_accounts]
+            return "$$$".join(all_handles_str)
 
     except ValueError as ve:
         logging.error(f"Error retrieving Wave 3 exposure data for {user_id=}: {str(ve)}")

@@ -163,7 +163,7 @@ def get_access_token(user_id):
     cursor.close()
 
 
-def save_exposure(user_id, followed_account1, followed_account2, other_muted_account1, other_muted_account2, other_unmuted_account1, other_unmuted_account2):
+def save_exposure(user_id, muted_account1, muted_account2, muted_account3, unmuted_account1, unmuted_account2, unmuted_account3):
     """
     In auth_qualtrics.py, w2_exposure()
     """
@@ -174,12 +174,12 @@ def save_exposure(user_id, followed_account1, followed_account2, other_muted_acc
     # SQL query to insert data
     insert_query = """
     INSERT INTO exposure_table 
-    (user_id, followed_account1, followed_account2, other_muted_account1, other_muted_account2, other_unmuted_account1, other_unmuted_account2) 
+    (user_id, muted_account1, muted_account2, muted_account3, unmuted_account1, unmuted_account2, unmuted_account3) 
     VALUES (%s, %s, %s, %s, %s, %s, %s);
     """
 
     # Execute the query
-    cursor.execute(insert_query, (user_id, followed_account1, followed_account2, other_muted_account1, other_muted_account2, other_unmuted_account1, other_unmuted_account2))
+    cursor.execute(insert_query, (user_id, muted_account1, muted_account2, muted_account3, unmuted_account1, unmuted_account2, unmuted_account3))
 
     logging.info(f"Exposure data saved successfully for user_id: {user_id}")
     cursor.close()

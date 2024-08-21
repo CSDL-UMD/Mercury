@@ -134,12 +134,12 @@ DROP TABLE IF EXISTS exposure_table;
 CREATE TABLE exposure_table (
     id SERIAL PRIMARY KEY,
     user_id VARCHAR(255) NOT NULL,
-    followed_account1 VARCHAR(255),
-    followed_account2 VARCHAR(255),
-    other_muted_account1 VARCHAR(255),
-    other_muted_account2 VARCHAR(255),
-    other_unmuted_account1 VARCHAR(255),
-    other_unmuted_account2 VARCHAR(255),
+    muted_account1 VARCHAR(255),
+    muted_account2 VARCHAR(255),
+    muted_account3 VARCHAR(255),
+    unmuted_account1 VARCHAR(255),
+    unmuted_account2 VARCHAR(255),
+    unmuted_account3 VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

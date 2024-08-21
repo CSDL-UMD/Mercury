@@ -544,16 +544,17 @@ def store_eligibility(user_id, criteria, passed, num_count):
     connection.commit()
 
 
-def store_w3_randomized_group(user_id, w3_randomized_group, random_price, session_start):
+def store_w3_randomized_group(user_id, w2_randomized_group, w3_randomized_group, random_price, session_start):
     """
     In auth_qualtrics.py script, store_w3_group()
     """
     logging.info(f"W3 randomized group update: {user_id=}, {w3_randomized_group=}, {random_price=}, {session_start=}")
-    sql_insert = """INSERT INTO w3_randomized_group (user_id, w3_randomized_group, random_price, session_start) 
-                    VALUES(%s, %s, %s, %s);"""
+    sql_insert = """INSERT INTO w3_randomized_group 
+                        (user_id, w2_randomized_group, w3_randomized_group, random_price, session_start) 
+                        VALUES(%s, %s, %s, %s, %s);"""
     sql_update = """UPDATE w3_randomized_group 
-                    SET w3_randomized_group = %s, random_price = %s, session_start = %s 
-                    WHERE user_id = %s;"""
+                        SET w2_randomized_group = %s, w3_randomized_group = %s, random_price = %s, session_start = %s 
+                        WHERE user_id = %s;"""
     connection = getdb()
     cursor = connection.cursor()
     # Check if the user already exists in the database
@@ -561,11 +562,11 @@ def store_w3_randomized_group(user_id, w3_randomized_group, random_price, sessio
     count_exists = cursor.fetchone()[0]
     if count_exists > 0:
         # Update existing user
-        cursor.execute(sql_update, (w3_randomized_group, random_price, session_start, user_id))
+        cursor.execute(sql_update, (w2_randomized_group, w3_randomized_group, random_price, session_start, user_id))
         logging.info(f"Randomized group updated successfully: {user_id=}")
     else:
         # Insert new user
-        cursor.execute(sql_insert, (user_id, w3_randomized_group, random_price, session_start))
+        cursor.execute(sql_insert, (user_id, w2_randomized_group, w3_randomized_group, random_price, session_start))
         logging.info(f"Randomized group inserted successfully: {user_id=}")
     cursor.close()
     connection.commit()
@@ -593,43 +594,41 @@ def update_w2_invitation(user_id):
     logging.info(f"Updating W2 Invitation only for those who passed eligibility criteria")
     connection = getdb()
     cursor = connection.cursor()
-    try:
-        # Fetch vsid from mercury_user table
-        fetch_vsid_sql = """
-        SELECT vsid FROM mercury_user WHERE user_id = %s
+
+    # Fetch vsid from mercury_user table
+    fetch_vsid_sql = """
+    SELECT vsid FROM mercury_user WHERE user_id = %s
+    """
+    cursor.execute(fetch_vsid_sql, (user_id,))
+    vsid_result = cursor.fetchone()
+
+    if not vsid_result:
+        logging.error(f"No vsid found for {user_id=}. Skipping W2 Invitation update. Need to check manually.")
+        return
+
+    vsid = vsid_result[0]
+
+    # Check eligibility
+    check_eligibility_sql = """
+    SELECT passed FROM eligibility 
+    WHERE user_id = %s AND criteria = 'account_created'
+    """
+    cursor.execute(check_eligibility_sql, (user_id,))
+    result = cursor.fetchone()
+
+    # Insert into w2_invitation table only if the condition is met
+    if result and result[0]:  # result[0] is the value of the 'passed' column
+        sql_insert = """
+        INSERT INTO w2_invitation (user_id, vsid) 
+        VALUES (%s, %s)
+        ON CONFLICT (user_id) DO NOTHING
         """
-        cursor.execute(fetch_vsid_sql, (user_id,))
-        vsid_result = cursor.fetchone()
-
-        if not vsid_result:
-            logging.info(f"No vsid found for user_id: {user_id}. Skipping W2 Invitation update.")
-            return
-
-        vsid = vsid_result[0]
-
-        # Check eligibility
-        check_eligibility_sql = """
-        SELECT passed FROM eligibility 
-        WHERE user_id = %s AND criteria = 'account_created'
-        """
-        cursor.execute(check_eligibility_sql, (user_id,))
-        result = cursor.fetchone()
-
-        # Insert into w2_invitation table only if the condition is met
-        if result and result[0]:  # result[0] is the value of the 'passed' column
-            sql_insert = """
-            INSERT INTO w2_invitation (user_id, vsid) 
-            VALUES (%s, %s)
-            """
-            cursor.execute(sql_insert, (user_id, vsid))
-            logging.info(f"W2 Invitation updated for user_id: {user_id}")
-        else:
-            logging.info(f"Account creation date not met for user_id: {user_id}. Skipping W2 Invitation update.")
-        connection.commit()
-    except Exception as e:
-        logging.error(f"Error updating W2 Invitation: {str(e)}")
-    finally:
-        cursor.close()
+        cursor.execute(sql_insert, (user_id, vsid))
+        logging.info(f"W2 Invitation updated for user_id: {user_id}")
+    else:
+        logging.info(f"Account creation date not met for {user_id=}. Skipping W2 Invitation update.")
+    connection.commit()
+    cursor.close()
 
 
 def update_w3_invitation(user_id):
@@ -647,23 +646,28 @@ def update_w3_invitation(user_id):
         vsid_result = cursor.fetchone()
 
         if not vsid_result:
-            logging.info(f"No vsid found for user_id: {user_id}. Skipping W3 Invitation update.")
-            return
+            logging.error(f"No vsid found for {user_id=}. Using 'should_update' as fallback.")
+            vsid = "should_update"
+        else:
+            vsid = vsid_result[0]
 
-        vsid = vsid_result[0]
-
-        # Fetch random_price from w2_randomized_group table
-        price_query = "SELECT random_price FROM w2_randomized_group WHERE user_id = %s"
+        # Fetch w2_randomized_group and random_price from w2_randomized_group table
+        price_query = """
+            SELECT w2_randomized_group, random_price 
+            FROM w2_randomized_group 
+            WHERE user_id = %s
+        """
         cursor.execute(price_query, (user_id,))
-        price_result = cursor.fetchone()
+        group_price_result = cursor.fetchone()
 
-        if not price_result:
-            logging.info(f"No random price found for user_id: {user_id}. Skipping W3 Invitation update.")
-            return
+        if not group_price_result:
+            logging.error(f"No w2_randomized_group and random price found for {user_id=}. Using default values.")
+            w2_randomized_group = "unknown"
+            payment = 100
+        else:
+            w2_randomized_group, payment = group_price_result
 
-        payment = price_result[0]
-
-        # Check if user exists in compliance table
+        # Check if user exists in compliance check table (if exists, violated compliance)
         compliance_query = "SELECT 1 FROM compliance WHERE user_id = %s"
         cursor.execute(compliance_query, (user_id,))
         compliance_result = cursor.fetchone()
@@ -671,16 +675,13 @@ def update_w3_invitation(user_id):
         compliance = compliance_result is None
 
         # Insert into w3_invitation table if conditions are met
-        if compliance:
-            insert_query = """
-            INSERT INTO w3_invitation (user_id, vsid, payment, compliance)
-            VALUES (%s, %s, %s, %s)
-            """
-            cursor.execute(insert_query, (user_id, vsid, payment, compliance))
-            connection.commit()
-            logging.info(f"W3 Invitation updated for {user_id=}")
-        else:
-            logging.info(f"{user_id=} exists in compliance table. Skipping W3 Invitation update.")
+        insert_query = """
+        INSERT INTO w3_invitation (user_id, vsid, payment, compliance, w2_randomized_group)
+        VALUES (%s, %s, %s, %s, %s)
+        """
+        cursor.execute(insert_query, (user_id, vsid, payment, compliance, w2_randomized_group))
+        connection.commit()
+        logging.info(f"W3 Invitation updated for {user_id=}")
 
     except Exception as e:
         logging.error(f"Error updating W3 Invitation: {str(e)}")
@@ -696,43 +697,52 @@ def update_w3_post_pay(user_id):
     logging.info(f"Updating Post-W3 payment info for {user_id=}")
     connection = getdb()
     cursor = connection.cursor()
-
     try:
         # Fetch vsid from mercury_user table
         vsid_query = "SELECT vsid FROM mercury_user WHERE user_id = %s"
         cursor.execute(vsid_query, (user_id,))
         vsid_result = cursor.fetchone()
-
         if not vsid_result:
             logging.info(f"No vsid found for user_id: {user_id}. Skipping W3 post-pay update.")
             return
-
         vsid = vsid_result[0]
 
-        # Fetch random_price from w3_randomized_group table
-        price_query = "SELECT random_price FROM w3_randomized_group WHERE user_id = %s"
-        cursor.execute(price_query, (user_id,))
-        price_result = cursor.fetchone()
-
-        if not price_result:
-            logging.info(f"No random price found for user_id: {user_id}. Skipping update.")
+        # Fetch random_price and w3_randomized_group from w3_randomized_group table
+        group_price_query = """
+            SELECT w3_randomized_group, random_price 
+            FROM w3_randomized_group 
+            WHERE user_id = %s
+        """
+        cursor.execute(group_price_query, (user_id,))
+        group_price_result = cursor.fetchone()
+        if not group_price_result:
+            logging.info(f"No w3_randomized_group and random price found for {user_id=}. Skipping update.")
             return
+        w3_randomized_group, payment = group_price_result
 
-        payment = price_result[0]
+        # Check if user exists in compliance check table (if exists, violated compliance)
+        compliance_query = "SELECT 1 FROM compliance WHERE user_id = %s"
+        cursor.execute(compliance_query, (user_id,))
+        compliance_result = cursor.fetchone()
+        compliance = compliance_result is None
 
         # Insert into w3_post_pay table if conditions are met
-
-        insert_query = """
-        INSERT INTO w3_post_pay (user_id, vsid, payment)
-        VALUES (%s, %s, %s)
-        """
-        cursor.execute(insert_query, (user_id, vsid, payment))
-        connection.commit()
-        logging.info(f"Post-W3 payment info updated for {user_id=}")
+        if compliance and w3_randomized_group == 'p_random_Keep':
+            insert_query = """
+            INSERT INTO w3_post_pay (user_id, vsid, payment)
+            VALUES (%s, %s, %s)
+            """
+            cursor.execute(insert_query, (user_id, vsid, payment))
+            connection.commit()
+            logging.info(f"Post-W3 payment info updated for {user_id=}")
+        else:
+            if not compliance:
+                logging.info(f"{user_id=} exists in compliance violation table. Skipping post-W3 payment info update.")
+            elif w3_randomized_group != 'p_random_Keep':
+                logging.info(f"{user_id=} is not in 'p_random_Keep' group. Skipping post-W3 payment info update.")
 
     except Exception as e:
-        logging.error(f"Error updating W3 Invitation: {str(e)}")
-
+        logging.error(f"Error updating w3_post_pay: {str(e)}")
     finally:
         cursor.close()
 
@@ -747,7 +757,8 @@ def record_compliance_violation(user_id, vsid, target_user_id, target_username, 
     target_user_id (str): The ID of the target user involved in the violation.
     target_username (str): The username of the target user.
     time_day (str): The date of the violation check.
-    case_tag (str): The type of violation (e.g., "Muting_Done" or "Unmuting_Done").
+    case_tag (str): The type of user case (e.g., "Muting_Done" or "Unmuting_Done").
+        e.g., If it's "Muting_Done", the user's status is Muting_Done but violated (=unmuted any).
 
     Returns: None
     """

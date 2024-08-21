@@ -715,7 +715,8 @@ def store_w3_group():
     along with random price $ and the current timestamp.
     """
     user_id = request.args.get("user_id").strip()
-    w3_randomized_group = request.args.get("group").strip()
+    w2_randomized_group = request.args.get("group").strip()
+    w3_randomized_group = request.args.get("new_group").strip()
     random_price = request.args.get("random_price").strip()
 
     # Get current timestamp
@@ -724,6 +725,7 @@ def store_w3_group():
     # store in DB:
     insert_group_payload = {
         "user_id": user_id,
+        "w2_randomized_group": w2_randomized_group,
         "w3_randomized_group": w3_randomized_group,
         "random_price": random_price,
         "session_start": current_timestamp

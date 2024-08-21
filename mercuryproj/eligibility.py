@@ -31,8 +31,7 @@ import pandas as pd
 import tweepy
 from tweepy.errors import TweepyException, Unauthorized, Forbidden
 from csv import writer
-from datetime import datetime as dt
-# from datetime import timedelta
+from datetime import datetime, timedelta
 from platformdirs import user_data_dir
 import requests
 from requests_oauthlib import OAuth1
@@ -103,16 +102,18 @@ def save_user_info():
             continue
 
         created_at_str = data['created_at'].replace("Z", "UTC")
-        created_at_dt = dt.strptime(created_at_str, "%Y-%m-%dT%H:%M:%S.%f%Z")
-        min_date = dt(2023, 11, 1)
-        # dt.now() - datetime.timedelta(days=60)
+        created_at_dt = datetime.strptime(created_at_str, "%Y-%m-%dT%H:%M:%S.%f%Z")
+
+        # Calculate the date 4 months ago from today
+        four_months_ago = datetime.now() - timedelta(days=4 * 30)  # Approximate 4 months
+
         public_metrics = data['public_metrics']
-        # configuration file - date fixed
-        if created_at_dt < min_date:
-            logging.info(f"{user_id=}'s account created before Nov 1 2023")
+
+        if created_at_dt < four_months_ago:
+            logging.info(f"{user_id=}'s account created more than 4 months ago")
             database.store_eligibility(user_id, "account_created", True, "na")
         else:
-            logging.info(f"{user_id=}'s account created after Nov 1 2023")
+            logging.info(f"{user_id=}'s account created less than 4 months ago")
             database.store_eligibility(user_id, "account_created", False, "na")
 
         row = [user_id, created_at_str, public_metrics]

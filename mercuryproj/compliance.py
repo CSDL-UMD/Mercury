@@ -1,12 +1,24 @@
 """
-Checking compliance for muting job during treatment period:
-- `check_mute_compliance()`
+This module performs compliance checks for the muting and unmuting treatment groups.
 
-Need to add compliance check for unmuting !!! (For post-endline)
+Main functions:
+1. check_mute_compliance(): Checks mute compliance for users who have completed muting or unmuting process.
+
+The module performs the following tasks:
+1. Retrieves users who have completed either muting or unmuting process.
+2. For each user:
+   a) Fetches their Twitter API access tokens.
+   b) Loads the list of accounts they were supposed to mute/unmute.
+   c) Checks the current connection status with those accounts using Twitter API.
+   d) Records any compliance violations in the database.
+   e) Saves compliance data for future reference.
+
+The module uses OAuth1 for Twitter API authentication and handles rate limiting by implementing a retry mechanism
+with a 15-minute wait when encountering a 429 (Too Many Requests) error.
+
+Note: This module currently checks compliance for both muting and unmuting.
 """
 import time
-
-import csv
 import json
 import logging
 import os
@@ -144,50 +156,29 @@ def check_mute_compliance():
         except Exception as e:
             logging.error(f"Unexpected error while saving compliance data for {user_id=}: {str(e)}")
 
-    time.sleep(10)
+        time.sleep(10)
 
-    logging.info('Now, mute compliance processing initiated')
-    # Retrieve compliance files - Extract unique user IDs and their latest file
-    directory = os.path.join(data_dir, "muting_job", "compliance")
-    files = os.listdir(directory)
-
-    user_files = {}
-    for file_name in files:
-        if file_name.endswith('.json'):
-            user_id, date_str = file_name.rsplit('_', 1)[0], file_name.rsplit('_', 1)[-1].replace('.json', '')
-            date = datetime.strptime(date_str, '%Y-%m-%d')
-            if user_id not in user_files or date > user_files[user_id][1]:
-                user_files[user_id] = (file_name, date)
-
-    # Process the most recent file for each user ID
-    for user_id, (file_name, _) in user_files.items():
-        file_path = os.path.join(directory, file_name)
-        try:
-            with open(file_path, 'r', encoding='utf-8') as file:
-                all_data = json.load(file)
-        except json.JSONDecodeError as e:
-            logging.error(f"JSON decode error in the {file_name=}: {str(e)}")
-            continue
-        except IOError as e:
-            logging.error(f"I/O error while reading {file_name=}: {str(e)}")
-            continue
+        logging.info('Now, mute compliance processing initiated')
 
         # Get user's state (Muting_Done or Unmuting_Done)
         user_state = next((user_info["state"] for user_info in all_users_state if user_info["user_id"] == user_id),
                           None)
 
         if user_state is None:
-            raise ValueError(f"Could not find state for {user_id=}")
+            logging.error(f"Could not find state for {user_id=}")
+            continue
 
         # Process compliance data and record violations
         vsid = database.get_vsid(user_id)
 
         for user in all_data:
-            is_muting = "connection_status" in user and "muting" in user["connection_status"]
+            is_muting = "connection_status" in user and "muting" in user.get("connection_status", [])
 
             # Compliance violated, record in database
             if (user_state == "Muting_Done" and not is_muting) or \
                     (user_state == "Unmuting_Done" and is_muting):
+                print(f"target_user_id={user['id']}, target_username = {user['username']}, case_tag = {user_state}")
+
                 database.record_compliance_violation(
                     user_id=user_id,
                     vsid=vsid,
@@ -196,7 +187,7 @@ def check_mute_compliance():
                     case_tag=user_state
                 )
                 logging.info(
-                    f"Recorded compliance violation for {user_id=}, target user: {user['username']}, case: {user_state}")
+                    f"Recorded compliance violation for {user_id=}, target: {user['username']}, case: {user_state}")
 
         logging.info(f'Compliance check and recording completed for {user_id=}')
 

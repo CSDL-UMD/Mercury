@@ -780,3 +780,52 @@ def record_compliance_violation(user_id, vsid, target_user_id, target_username, 
         logging.error(f"Error recording compliance violation for {user_id=}: {str(e)}")
     finally:
         cursor.close()
+
+
+def get_voluntary_unmute_condition():
+    """
+    From w3_randomized_group TABLE, retrieve user_ids with w2_randomized_group == "muting_treatment1" and
+    w3_randomized_group == "no_offer".
+    """
+    connection = getdb()
+    cursor = connection.cursor()
+
+    query = """
+    SELECT user_id
+    FROM w3_randomized_group
+    WHERE w2_randomized_group = 'muting_treatment1'
+    AND w3_randomized_group = 'no_offer';
+    """
+
+    cursor.execute(query)
+    user_ids = [row[0] for row in cursor.fetchall()]
+
+    cursor.close()
+    connection.close()
+
+    # Return the list of user_ids
+    return user_ids
+
+
+def record_compliance_voluntary_unmuting(user_id, target_user_id, target_username):
+    """
+    Record a compliance fo voluntary unmuting in the database.
+    """
+    logging.info(f"Recording compliance violation for {user_id=}, target user: {target_username}")
+
+    sql_insert = """
+    INSERT INTO compliance (user_id, vsid, target_user_id, target_username)
+    VALUES (%s, %s, %s, %s);
+    """
+
+    connection = getdb()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute(sql_insert, (user_id, target_user_id, target_username))
+        connection.commit()
+        logging.info(f"Compliance for voluntary unmuting recorded successfully for {user_id=}")
+    except Exception as e:
+        logging.error(f"Error recording compliance for voluntary unmuting for {user_id=}: {str(e)}")
+    finally:
+        cursor.close()

@@ -187,3 +187,13 @@ CREATE TABLE compliance (
     case_tag VARCHAR(50),
     created_at DATE DEFAULT CURRENT_DATE
 );
+
+DROP TABLE IF EXISTS compliance_voluntary;
+
+CREATE TABLE compliance_voluntary (
+    id SERIAL PRIMARY KEY,
+    user_id VARCHAR(255),
+    target_user_id VARCHAR(255),
+    target_username VARCHAR(255),
+    created_at DATE DEFAULT CURRENT_DATE
+);

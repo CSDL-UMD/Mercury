@@ -20,14 +20,6 @@ CREATE TABLE mercury_user (
     w1_status BOOLEAN
 );
 
-DROP TABLE IF EXISTS following_result;
-
-CREATE TABLE following_result (
-    id SERIAL PRIMARY KEY,
-    user_id VARCHAR(255),
-    success VARCHAR(255),
-    session_start TIMESTAMP
-);
 
 DROP TABLE IF EXISTS following_politifact;
 
@@ -44,16 +36,6 @@ CREATE TABLE mute_group (
     id SERIAL PRIMARY KEY,
     user_id VARCHAR(255),
     state VARCHAR(255)
-);
-
-DROP TABLE IF EXISTS w2_randomized_group;
-
-CREATE TABLE w2_randomized_group (
-    id SERIAL PRIMARY KEY,
-    user_id VARCHAR(255),
-    w2_randomized_group VARCHAR(255),
-    random_price NUMERIC,
-    session_start TIMESTAMP
 );
 
 DROP TABLE IF EXISTS mute_result;
@@ -79,44 +61,14 @@ CREATE TABLE eligibility (
 );
 
 
--- Create a new table to store data from the CSV file
-CREATE TABLE users_for_elig_test (
+DROP TABLE IF EXISTS w2_randomized_group;
+
+CREATE TABLE w2_randomized_group (
+    id SERIAL PRIMARY KEY,
     user_id VARCHAR(255),
-    screen_name VARCHAR(255),
-    vsid VARCHAR(255)
-);
-
--- Copy data from a CSV file into the newly created table
-
--- Create a view that combines information from the mercury_user table and the users_for_elig_test table
-CREATE VIEW mercury_users_with_vsid AS
-SELECT m.user_id, m.screen_name, u.vsid
-FROM mercury_user m
--- Perform an inner join on the mercury_user table and the users_for_elig_test table
-INNER JOIN users_for_elig_test u ON m.user_id = u.user_id;
-
-
-CREATE TABLE wave2_exposure_table (
-    user_id VARCHAR(255),
-    target_user_id VARCHAR(255),
-    twitter_handle VARCHAR(255),
-    followers INTEGER,
-    following BOOLEAN,
-    hometimeline BOOLEAN,
-    UNIQUE(user_id, target_user_id)
-);
-
-
-DROP TABLE IF EXISTS eligible_users;
-
-CREATE TABLE eligible_users (
-    user_id VARCHAR(255),
-    screen_name VARCHAR(255),
-    vsid VARCHAR(255),
-    access_token VARCHAR(255),
-    access_token_secret VARCHAR(255),
-    session_start TIMESTAMP,
-    oauth_token VARCHAR(255)
+    w2_randomized_group VARCHAR(255),
+    random_price NUMERIC,
+    session_start TIMESTAMP
 );
 
 DROP TABLE IF EXISTS w3_randomized_group;

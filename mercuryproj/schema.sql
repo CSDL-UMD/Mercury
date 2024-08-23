@@ -75,7 +75,7 @@ DROP TABLE IF EXISTS w3_randomized_group;
 
 CREATE TABLE w3_randomized_group (
     id SERIAL PRIMARY KEY,
-    user_id VARCHAR(255) UNIQUE,
+    user_id VARCHAR(255),
     w2_randomized_group VARCHAR(255),
     w3_randomized_group VARCHAR(255),
     random_price NUMERIC,

@@ -4,7 +4,6 @@ This module collects post-treatment engagements and likes for participants on Tw
     - Collects up to 100 post-treatment tweets (31 days before the date that Wave 1 was taken).
     - Collects up to 70 liked tweets without a time frame restriction (due to API limitation).
     - Parses collected tweets and likes for direct and indirect interactions with target sources.
-    - Updates eligibility status based on the parsed data.
 
 Data Collection:
 - Engagements (excluding likes) are retrieved using bearer token and the Twitter API's `search all` endpoint.

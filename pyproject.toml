@@ -46,10 +46,11 @@ include-package-data = true
 where = ["."]
 
 [project.scripts]
-compliance-run = "mercuryproj.compliance:main"
-muting-run = "mercuryproj.muting:main"
+eligibility-run = "mercuryproj.eligibility:main"
 pre-engagements-run = "mercuryproj.pre_engagements:main"
 post-engagements-run = "mercuryproj.post_engagements:main"
 post-endline-engagements-run = "mercuryproj.post_endline_engagements:main"
-eligibility-run = "mercuryproj.eligibility:main"
+muting-run = "mercuryproj.muting:main"
 unmuting-run = "mercuryproj.unmuting:main"
+compliance-run = "mercuryproj.compliance:main"
+compliance-voluntary-run = "mercuryproj.compliance_voluntary:main"

@@ -209,18 +209,18 @@ def get_exposure(user_id):
     cursor = connection.cursor()
     try:
         cursor.execute(
-            "SELECT followed_account1, followed_account2, other_muted_account1, other_muted_account2, other_unmuted_account1, other_unmuted_account2 FROM exposure_table WHERE user_id=%s;",
+            "SELECT muted_account1, muted_account2, muted_account3, unmuted_account1, unmuted_account2, unmuted_account3 FROM exposure_table WHERE user_id=%s;",
             (user_id,))
         result = cursor.fetchone()
 
         if result:
             exposure_data = {
-                "followed_account1": result[0],
-                "followed_account2": result[1],
-                "other_muted_account1": result[2],
-                "other_muted_account2": result[3],
-                "other_unmuted_account1": result[4],
-                "other_unmuted_account2": result[5]
+                "muted_account1": result[0],
+                "muted_account2": result[1],
+                "muted_account3": result[2],
+                "unmuted_account1": result[3],
+                "unmuted_account2": result[4],
+                "unmuted_account3": result[5]
             }
             logging.info(f"Successfully retrieved exposure data for {user_id=}")
             return exposure_data
@@ -365,7 +365,7 @@ def get_randomized_group(user_id):
     logging.info(f"Get randomized group for {user_id=}")
     connection = getdb()
     cursor = connection.cursor()
-    cursor.execute("SELECT randomized_group FROM w2_randomized_group WHERE user_id=%s;", (user_id,))
+    cursor.execute("SELECT w2_randomized_group FROM w2_randomized_group WHERE user_id=%s;", (user_id,))
     result = cursor.fetchone()[0]
     cursor.close()
     return result

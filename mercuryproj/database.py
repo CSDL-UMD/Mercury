@@ -171,18 +171,33 @@ def save_exposure(user_id, muted_account1, muted_account2, muted_account3, unmut
     connection = getdb()
     cursor = connection.cursor()
 
-    # SQL query to insert data
-    insert_query = """
-    INSERT INTO exposure_table 
+    # SQL query for upsert
+    upsert_query = """
+    INSERT INTO exposure_table
     (user_id, muted_account1, muted_account2, muted_account3, unmuted_account1, unmuted_account2, unmuted_account3) 
-    VALUES (%s, %s, %s, %s, %s, %s, %s);
+    VALUES (%s, %s, %s, %s, %s, %s, %s)
+    ON CONFLICT (user_id)
+    DO UPDATE SET 
+    muted_account1 = EXCLUDED.muted_account1,
+    muted_account2 = EXCLUDED.muted_account2,
+    muted_account3 = EXCLUDED.muted_account3,
+    unmuted_account1 = EXCLUDED.unmuted_account1,
+    unmuted_account2 = EXCLUDED.unmuted_account2,
+    unmuted_account3 = EXCLUDED.unmuted_account3,
+    created_at = CURRENT_TIMESTAMP; 
     """
+    try:
+        # Execute the query
+        cursor.execute(upsert_query,
+                       (user_id, muted_account1, muted_account2, muted_account3, unmuted_account1, unmuted_account2, unmuted_account3))
+        connection.commit()
 
-    # Execute the query
-    cursor.execute(insert_query, (user_id, muted_account1, muted_account2, muted_account3, unmuted_account1, unmuted_account2, unmuted_account3))
-
-    logging.info(f"Exposure data saved successfully for user_id: {user_id}")
-    cursor.close()
+        logging.info(f"Exposure data saved successfully for user_id: {user_id}")
+    except Exception as e:
+        # Log the error
+        logging.error(f"Error saving exposure data for user_id {user_id}: {str(e)}")
+    finally:
+        cursor.close()
 
 
 def get_exposure(user_id):
@@ -249,25 +264,46 @@ def store_follow_politifact(user_id, success, session_start):
 def store_w2_randomized_group(user_id, w2_randomized_group, random_price, session_start):
     """
     In auth_qualtrics.py, store_group()
+
+    Store or update the Wave 2 randomized group information for a user.
+
+    This function performs an upsert operation: if the user doesn't exist, it inserts a new record;
+    if the user already exists, it updates the existing record.
+
+    Args:
+        user_id (str): The unique identifier for the user.
+        w2_randomized_group (str): The randomized group assigned to the user for Wave 2.
+        random_price (float): The random price assigned to the user.
+        session_start (str): The timestamp for the start of the session.
+
+    Returns:
+        None
     """
-    logging.info(f"Randomized group update: {user_id=}, {w2_randomized_group=}, {session_start=}")
-    sql_insert = """INSERT INTO w2_randomized_group (user_id, w2_randomized_group, random_price, session_start) VALUES(%s, %s, %s, %s);"""
-    sql_update = """UPDATE w2_randomized_group SET w2_randomized_group = %s, random_price = %s, session_start = %s WHERE user_id = %s;"""
+    # Log the incoming data
+    logging.info(f"Storing W2 randomized group: user_id={user_id}, group={w2_randomized_group}, session_start={session_start}")
+
+    # SQL query for upserting the data (PostgreSQL version)
+    sql_upsert = """
+    INSERT INTO w2_randomized_group (user_id, w2_randomized_group, random_price, session_start) 
+    VALUES (%s, %s, %s, %s)
+    ON CONFLICT (user_id) DO UPDATE SET 
+    w2_randomized_group = EXCLUDED.w2_randomized_group,
+    random_price = EXCLUDED.random_price,
+    session_start = EXCLUDED.session_start;
+    """
+
+    # Get database connection
     connection = getdb()
     cursor = connection.cursor()
-    # Check if the user already exists in the database
-    cursor.execute("SELECT COUNT(*) FROM w2_randomized_group WHERE user_id=%s;", (user_id,))
-    count_exists = cursor.fetchone()[0]
-    if count_exists > 0:
-        # Update existing user
-        cursor.execute(sql_update, (w2_randomized_group, random_price, session_start, user_id))
-        logging.info(f"Randomized group updated successfully: {user_id=}")
-    else:
-        # Insert new user
-        cursor.execute(sql_insert, (user_id, w2_randomized_group, random_price, session_start))
-        logging.info(f"Randomized group inserted successfully: {user_id=}")
-    cursor.close()
-    connection.commit()
+
+    try:
+        cursor.execute(sql_upsert, (user_id, w2_randomized_group, random_price, session_start))
+        connection.commit()
+        logging.info(f"W2 randomized group upserted successfully for user_id: {user_id}")
+    except Exception as e:
+        logging.error(f"Error upserting W2 randomized group for {user_id=}: {str(e)}")
+    finally:
+        cursor.close()
 
 
 def store_vsid(user_id, vsid):

@@ -639,10 +639,10 @@ def update_w2_invitation(user_id):
     vsid_result = cursor.fetchone()
 
     if not vsid_result:
-        logging.error(f"No vsid found for {user_id=}. Skipping W2 Invitation update. Need to check manually.")
-        return
-
-    vsid = vsid_result[0]
+        logging.error(f"No vsid found for {user_id=}. Arbitrary vsid. Need to check manually.")
+        vsid = "should_update"
+    else:
+        vsid = vsid_result[0]
 
     # Check eligibility
     check_eligibility_sql = """
@@ -669,7 +669,25 @@ def update_w2_invitation(user_id):
 
 def update_w3_invitation(user_id):
     """
-    Update W3 Invitation Table
+    Updates the W3 Invitation table for a given user.
+
+    This function performs the following steps:
+    1. Retrieves the user's VSID from the mercury_user table. If no VSID is found,
+       a default value of "should_update" is used.
+    2. Fetches the user's W2 randomized group and random price from the
+       w2_randomized_group table. If no data is found, default values of
+       "unknown" for the group and 100 for the payment are used.
+    3. Checks the compliance table to determine if the user violated any compliance rules.
+       Compliance is considered met if the user is not found in this table.
+    4. Inserts the user's data into the w3_invitation table, including their
+       VSID, payment, compliance status, and W2 randomized group.
+    5. Logs relevant information at each step and commits the transaction to the database.
+
+    Args:
+        user_id (str): The unique identifier for the user.
+
+    Returns:
+        None
     """
     logging.info(f"Updating W3 Invitation for {user_id=}")
     connection = getdb()
@@ -728,8 +746,26 @@ def update_w3_invitation(user_id):
 
 def update_w3_post_pay(user_id):
     """
-    Update Post-W3 Payment Table
+    Updates the Post-W3 Payment Table for a given user.
+
+    This function performs the following steps:
+    1. Retrieves the user's VSID from the mercury_user table. If no VSID is found,
+       a default value of "should_update" is used.
+    2. Fetches the user's W3 randomized group and random price from the
+       w3_randomized_group table. If no data is found, the update process is skipped.
+    3. Checks the compliance table to determine if the user has violated any compliance rules.
+       Compliance is considered met if the user is not found in this table.
+    4. Inserts the user's data into the w3_post_pay table only if the user
+       is in the 'p_random_Keep' group and has not violated compliance rules.
+    5. Logs relevant information at each step and commits the transaction to the database.
+
+    Args:
+        user_id (str): The unique identifier for the user.
+
+    Returns:
+        None
     """
+
     logging.info(f"Updating Post-W3 payment info for {user_id=}")
     connection = getdb()
     cursor = connection.cursor()
@@ -739,10 +775,10 @@ def update_w3_post_pay(user_id):
         cursor.execute(vsid_query, (user_id,))
         vsid_result = cursor.fetchone()
         if not vsid_result:
-            logging.info(f"No vsid found for user_id: {user_id}. Skipping W3 post-pay update.")
-            return
-        vsid = vsid_result[0]
-
+            logging.error(f"No vsid found for {user_id=} in post-w3 pay. Using 'should_update' as fallback.")
+            vsid = "should_update"
+        else:
+            vsid = vsid_result[0]
         # Fetch random_price and w3_randomized_group from w3_randomized_group table
         group_price_query = """
             SELECT w3_randomized_group, random_price 

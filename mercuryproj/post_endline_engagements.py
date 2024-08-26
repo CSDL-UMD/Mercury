@@ -136,6 +136,9 @@ def post_endline_engagement():
                     response.raise_for_status()  # If HTTP error occurs, it will raise an HTTPError exception
                     tweets = response.json().get('data', [])
                     time.sleep(2)  # Wait for 2 seconds before making the next request
+                except requests.exceptions.HTTPError as e:
+                    logging.error(f"HTTP error while fetching after retry for {user_id=}: {e}")
+                    continue
                 except (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
                         requests.exceptions.RequestException) as retry_e:
                     logging.error(f"Failed to fetch data for {user_id=} after retry: {retry_e}")

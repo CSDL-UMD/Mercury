@@ -3,8 +3,6 @@ This module collects pre-treatment engagements and likes for participants on Twi
 - For each account:
     - Collects up to 100 pre-treatment tweets (31 days before the date that Wave 1 was taken).
     - Collects up to 70 liked tweets without a time frame restriction (due to API limitation).
-    - Parses collected tweets and likes for direct and indirect interactions with target sources.
-    - Updates eligibility status based on the parsed data.
 
 Data Collection:
 - Engagements (excluding likes) are retrieved using bearer token and the Twitter API's `search all` endpoint.
@@ -16,8 +14,6 @@ Rate Limits:
 
 File Management:
 - Collected pre-treatment engagements and likes are saved in specific directories under the data_dir.
-- Parsed data is stored in a separate directory for further analysis.
-- Overall, eligibility is saved in the database, indicating whether users passed the pre-treatment engagement criteria.
 """
 
 import time
@@ -71,6 +67,14 @@ def extract_twitter_handle(url):
     return None
 
 
+def save_json_data_if_not_exists(file_path):
+    if os.path.exists(file_path):
+        logging.info(f"File {file_path} already exists. Skipping this user.")
+        return False
+    else:
+        return True
+
+
 def pre_treatment_engagement():
     """
     This function collects pre-treatment engagements using bearer token.
@@ -87,7 +91,6 @@ def pre_treatment_engagement():
     user_chunks = list(chunker(user_id_list, 300))
     total_chunks = len(user_chunks)
 
-    # Chunk user_id_list into chunks of 300
     for chunk_index, user_chunk in enumerate(user_chunks, 1):
         for user_id in user_chunk:
             logging.info(f"Collecting pre-treatment tweets for {user_id=}")
@@ -99,78 +102,93 @@ def pre_treatment_engagement():
             start_time = (session_start - timedelta(days=31)).strftime('%Y-%m-%dT%H:%M:%SZ')
             end_time = (session_start - timedelta(days=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
 
-            # Get the username of each user_id:
-            client = tweepy.Client(bearer_token, return_type=dict)
-            response = client.get_user(id=user_id)
-            if 'data' in response:
-                username = response['data']['username']
-            else:
-                logging.error(f"No 'data' key for {user_id=}")
-                continue
+            # Directory path
+            directory_engagement = os.path.join(data_dir, "engagements", "pre-engagements")
+            directory_likes = os.path.join(data_dir, "engagements", "pre-likes")
 
-            # Create headers
-            headers = {"Authorization": f"Bearer {bearer_token}"}
+            if not os.path.exists(directory_engagement):
+                logging.warning(f"Configuration dir {directory_engagement} does not exist. Creating it now.")
+                os.makedirs(directory_engagement, exist_ok=True)
+            if not os.path.exists(directory_likes):
+                logging.warning(f"Configuration dir {directory_likes} does not exist. Creating it now.")
+                os.makedirs(directory_likes, exist_ok=True)
 
-            # Create URL and parameters
-            search_url = f"https://api.twitter.com/2/tweets/search/all"
-            # search_url = f"https://api.twitter.com/2/tweets/search/recent"  # For testing
+            # File path
+            engagement_file_path = os.path.join(directory_engagement, f"pre-engagemetns_{user_id}.json")
+            likes_file_path = os.path.join(directory_likes, f"pre-likes_{user_id}.json")
 
-            query_params = {
-                'query': f'from:{username}',
-                'tweet.fields': 'attachments,author_id,conversation_id,created_at,entities,in_reply_to_user_id,lang,public_metrics,referenced_tweets,reply_settings',
-                'user.fields': 'id,name,username,created_at,description,entities,location,pinned_tweet_id,profile_image_url,protected,public_metrics,url,verified',
-                'media.fields': 'media_key,type,url,duration_ms,height,preview_image_url,public_metrics,width',
-                'expansions': 'author_id,referenced_tweets.id,attachments.media_keys',
-                'start_time': start_time,
-                'end_time': end_time,
-                'max_results': 100  # Adjust: For the main study, we only collect max 100 tweets per user_id
-            }
+            # Check if file already exists
+            engagement_file_exists = save_json_data_if_not_exists(engagement_file_path)
 
-            try:
-                response = requests.get(search_url, headers=headers, params=query_params)
-                response.raise_for_status()  # If HTTP error occurs, it will raise an HTTPError exception
-                tweets = response.json().get('data', [])
-                time.sleep(2)  # Wait for 2 seconds before making the next request
-            except requests.exceptions.HTTPError as e:
-                logging.error(f"HTTP error while fetching pre-engagement data for {user_id=}: {e}")
-                continue
-            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
-                    requests.exceptions.RequestException) as e:
-                logging.warning(f"Network error for {user_id=}: {e}. Retrying after 3 minutes.")
-                time.sleep(60 * 3)  # Sleep for 3 minutes before retrying
+            # Collect only if file does not exist
+            if engagement_file_exists:
+                # Get the username of each user_id:
+                client = tweepy.Client(bearer_token, return_type=dict)
+                response = client.get_user(id=user_id)
+                if 'data' in response:
+                    username = response['data']['username']
+                else:
+                    logging.error(f"No 'data' key for {user_id=}")
+                    continue
+
+                # Create headers
+                headers = {"Authorization": f"Bearer {bearer_token}"}
+
+                # Create URL and parameters
+                # search_url = f"https://api.twitter.com/2/tweets/search/all"
+                search_url = f"https://api.twitter.com/2/tweets/search/recent"  # For testing
+
+                query_params = {
+                    'query': f'from:{username}',
+                    'tweet.fields': 'attachments,author_id,conversation_id,created_at,entities,in_reply_to_user_id,lang,public_metrics,referenced_tweets,reply_settings',
+                    'user.fields': 'id,name,username,created_at,description,entities,location,pinned_tweet_id,profile_image_url,protected,public_metrics,url,verified',
+                    'media.fields': 'media_key,type,url,duration_ms,height,preview_image_url,public_metrics,width',
+                    'expansions': 'author_id,referenced_tweets.id,attachments.media_keys',
+                    #'start_time': start_time,
+                    #'end_time': end_time,
+                    'max_results': 100  # Adjust: For the main study, we only collect max 100 tweets per user_id
+                }
+
                 try:
                     response = requests.get(search_url, headers=headers, params=query_params)
                     response.raise_for_status()  # If HTTP error occurs, it will raise an HTTPError exception
                     tweets = response.json().get('data', [])
                     time.sleep(2)  # Wait for 2 seconds before making the next request
                 except requests.exceptions.HTTPError as e:
-                    logging.error(f"HTTP error while fetching after retry for {user_id=}: {e}")
+                    logging.error(f"HTTP error while fetching pre-engagement data for {user_id=}: {e}")
                     continue
                 except (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
-                        requests.exceptions.RequestException) as retry_e:
-                    logging.error(f"Failed to fetch data for {user_id=} after retry: {retry_e}")
-                    continue
-            except Exception as e:
-                logging.error(f"Unexpected error while fetching pre-engagement data for {user_id=}: {e}")
-                continue  # Continue to process the next user (For error user_ids, collect data in the backend)
+                        requests.exceptions.RequestException) as e:
+                    logging.warning(f"Network error for {user_id=}: {e}. Retrying after 3 minutes.")
+                    time.sleep(60 * 3)  # Sleep for 3 minutes before retrying
+                    try:
+                        response = requests.get(search_url, headers=headers, params=query_params)
+                        response.raise_for_status()  # If HTTP error occurs, it will raise an HTTPError exception
+                        tweets = response.json().get('data', [])
+                        time.sleep(2)  # Wait for 2 seconds before making the next request
+                    except requests.exceptions.HTTPError as e:
+                        logging.error(f"HTTP error while fetching after retry for {user_id=}: {e}")
+                        continue
+                    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
+                            requests.exceptions.RequestException) as retry_e:
+                        logging.error(f"Failed to fetch data for {user_id=} after retry: {retry_e}")
+                        continue
+                except Exception as e:
+                    logging.error(f"Unexpected error while fetching pre-engagement data for {user_id=}: {e}")
+                    continue  # Continue to process the next user (For error user_ids, collect data in the backend)
 
-            # Save tweets to file
-            directory_engagement = os.path.join(data_dir, "engagements", "pre-engagements")
-            if not os.path.exists(directory_engagement):
-                logging.warning(f"Configuration dir {directory_engagement} does not exist. Creating it now.")
-                os.makedirs(directory_engagement, exist_ok=True)
-
-            try:
-                file_path = os.path.join(directory_engagement, f"pre-engagements_{user_id}.json")
-                with open(file_path, 'w') as outfile:
-                    json.dump(tweets, outfile, indent=4)
-                    logging.info(f"Saved pre_treatment tweets for user: {user_id} to {file_path}")
-            except OSError as e:
-                logging.error(f"File operation failed for {user_id=}: {e}")
-            except json.JSONDecodeError as e:
-                logging.error(f"Failed to encode pre_treatment tweets to JSON for {user_id=}: {e}")
-            except Exception as e:
-                logging.error(f"Unexpected error when saving pre_treatment tweets for {user_id=}: {e}")
+                # Save tweets to file
+                try:
+                    file_path = os.path.join(directory_engagement, f"pre-engagements_{user_id}.json")
+                    with open(file_path, 'w') as outfile:
+                        json.dump(tweets, outfile, indent=4)
+                        logging.info(f"Saved pre_treatment tweets for user: {user_id} to {file_path}")
+                except OSError as e:
+                    logging.error(f"File operation failed for {user_id=}: {e}")
+                except json.JSONDecodeError as e:
+                    logging.error(f"Failed to encode pre_treatment tweets to JSON for {user_id=}: {e}")
+                except Exception as e:
+                    logging.error(f"Unexpected error when saving pre_treatment tweets for {user_id=}: {e}")
 
             time.sleep(3)
 
@@ -203,188 +221,58 @@ def pre_treatment_engagement():
             media_fields = "media_key,type,url,duration_ms,height,preview_image_url,public_metrics,width"
             expansions = "author_id,referenced_tweets.id,attachments.media_keys"
 
-            # Set up the paginator for fetching liked tweets
-            paginator = tweepy.Paginator(client.get_liked_tweets,
-                                         id=user_id,
-                                         tweet_fields=tweet_fields,
-                                         user_fields=user_fields,
-                                         media_fields=media_fields,
-                                         expansions=expansions,
-                                         max_results=70,
-                                         user_auth=True)
+            # Check if file already exists
+            likes_file_exists = save_json_data_if_not_exists(likes_file_path)
 
-            # Set up the directory for storing results
-            directory_likes = os.path.join(data_dir, "engagements", "pre-likes")
-            if not os.path.exists(directory_likes):
-                logging.warning(f"Configuration dir {directory_likes} does not exist. Creating it now.")
-                os.makedirs(directory_likes, exist_ok=True)
+            if likes_file_exists:
+                # Set up the paginator for fetching liked tweets
+                paginator = tweepy.Paginator(client.get_liked_tweets,
+                                             id=user_id,
+                                             tweet_fields=tweet_fields,
+                                             user_fields=user_fields,
+                                             media_fields=media_fields,
+                                             expansions=expansions,
+                                             max_results=70,
+                                             user_auth=True)
 
-            # Open the file for writing likes data
-            with open(os.path.join(directory_likes, f"pre-likes_{user_id}.json"), 'a') as outfile:
-                arr = []
-                try:
-                    for response in paginator.flatten(limit=70):
-                        if len(arr) < 71:
-                            arr.append(response)
-                        else:
-                            break
-                    json.dump(arr, outfile, indent=4)
-                    logging.info(f"Done collecting likes of {user_id=}")
-                except tweepy.TweepyException as e:
-                    logging.warning(f"Tweepy error for {user_id=}: {e}. Retrying after 3 minutes.")
-                    time.sleep(60 * 3)  # Sleep for 3 minutes before retrying
+                # Set up the directory for storing results
+                directory_likes = os.path.join(data_dir, "engagements", "pre-likes")
+                if not os.path.exists(directory_likes):
+                    logging.warning(f"Configuration dir {directory_likes} does not exist. Creating it now.")
+                    os.makedirs(directory_likes, exist_ok=True)
+
+                # Open the file for writing likes data
+                with open(os.path.join(directory_likes, f"pre-likes_{user_id}.json"), 'a') as outfile:
+                    arr = []
                     try:
-                        arr = []
                         for response in paginator.flatten(limit=70):
                             if len(arr) < 71:
                                 arr.append(response)
                             else:
                                 break
                         json.dump(arr, outfile, indent=4)
-                        logging.info(f"Successfully collected pre-likes for {user_id=} after retry")
-                    except tweepy.TweepyException as retry_e:
-                        logging.error(f"Failed to collect pre-likes for {user_id=} after retry: {retry_e}")
-                        continue
-                except json.JSONDecodeError as e:
-                    logging.error(f"Failed to encode pre-likes to JSON for {user_id=}: {e}")
-                    continue
-                except Exception as e:
-                    logging.error(f"An unexpected error occurred while collecting pre-likes for {user_id=}: {e}")
-                    continue
-
-            # Now parse the collected tweets and likes
-            logging.info(f"Parsing pre-treatment engagement data for {user_id=}.")
-            matches = []
-
-            # Parse tweets
-            for tweet in tweets:
-                if "referenced_tweets" not in tweet:
-                    if "mentions" in tweet.get("entities", {}):
-                        for mention in tweet["entities"]["mentions"]:
-                            if mention["id"] in target_user_ids:
-                                matches.append({"user_id": user_id, "target_user_id": mention["id"],
-                                                "type": "direct", "created_at": tweet["created_at"]})
-                    elif "urls" in tweet.get("entities", {}):
-                        for url in tweet["entities"]["urls"]:
-                            twitter_handle = extract_twitter_handle(url["expanded_url"])
-                            if twitter_handle and twitter_handle.lower() in map(str.lower, target_usernames):
-                                try:
-                                    handle_index = list(map(str.lower, target_usernames)).index(twitter_handle.lower())
-                                    matched_target_user_id = target_user_ids[handle_index]
-                                    matches.append(
-                                        {"user_id": user_id, "target_user_id": matched_target_user_id,
-                                         "type": "direct", "created_at": tweet["created_at"]})
-                                except ValueError:
-                                    logging.error(f"twitter_handle not found in target_usernames: {twitter_handle}")
-                                except IndexError:
-                                    logging.error(f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
-                else:
-                    for ref_tweet in tweet["referenced_tweets"]:
-                        if ref_tweet["type"] == "replied_to":
-                            if tweet["in_reply_to_user_id"] in target_user_ids:
-                                matches.append(
-                                    {"user_id": user_id, "target_user_id": tweet["in_reply_to_user_id"],
-                                     "type": "replied", "created_at": tweet["created_at"]})
-                        elif ref_tweet["type"] == "retweeted":
-                            if "mentions" in tweet.get("entities", {}):
-                                for mention in tweet["entities"]["mentions"]:
-                                    if mention["id"] in target_user_ids:
-                                        matches.append({"user_id": user_id, "target_user_id": mention["id"],
-                                                        "type": "retweeted", "created_at": tweet["created_at"]})
-                        elif ref_tweet['type'] == 'quoted' and 'mentions' in tweet['entities']:
-                            if "mentions" in tweet.get("entities", {}):
-                                for mention in tweet["entities"]["mentions"]:
-                                    if mention["id"] in target_user_ids:
-                                        matches.append({"user_id": user_id, "target_user_id": mention["id"],
-                                                        "type": "quoted", "created_at": tweet["created_at"]})
-                        elif ref_tweet['type'] == 'quoted' and 'mentions' not in tweet['entities']:
-                            if 'urls' in tweet.get('entities', {}):
-                                for url_info in tweet['entities']['urls']:
-                                    expanded_url = url_info.get('expanded_url', '')
-                                    twitter_handle = extract_twitter_handle(expanded_url)
-                                    if twitter_handle and twitter_handle.lower() in map(str.lower, target_usernames):
-                                        try:
-                                            handle_index = list(map(str.lower, target_usernames)).index(
-                                                twitter_handle.lower())
-                                            matched_target_user_id = target_user_ids[handle_index]
-                                            matches.append(
-                                                {"user_id": user_id, "target_user_id": matched_target_user_id,
-                                                 "type": "quoted", "created_at": tweet["created_at"]})
-                                        except ValueError:
-                                            logging.error(f"twitter_handle not found in target_usernames: {twitter_handle}")
-                                        except IndexError:
-                                            logging.error(f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
-
-            # Parse likes
-            logging.info(f"Parsing pre-treatment likes data for {user_id=}.")
-            processed_tweets = set()
-
-            for like in arr:
-                author_id = like.get("author_id")
-                tweet_id = like.get("id")  # unique tweet id
-
-                # Skip if this tweet has already been processed
-                if tweet_id in processed_tweets:
-                    continue
-
-                processed_tweets.add(tweet_id)  # Mark this tweet as processed
-                direct_liked = False  # Initialize
-
-                # Direct likes
-                if author_id in target_user_ids:
-                    matches.append({"user_id": user_id, "target_user_id": author_id,
-                                    "type": "direct_like", "created_at": like["created_at"]})
-                    direct_liked = True
-
-                # Indirect likes through mentions OR urls (only if not direct liked)
-                if not direct_liked:
-                    mentioned = False
-                    for mention in like.get("entities", {}).get("mentions", []):
-                        if mention["id"] in target_user_ids:
-                            matches.append({"user_id": user_id, "target_user_id": mention["id"],
-                                            "type": "indirect_like", "created_at": like["created_at"]})
-                            mentioned = True
-                            break
-
-                    if not mentioned and "urls" in like.get("entities", {}):
-                        for url in like["entities"]["urls"]:
-                            twitter_handle = extract_twitter_handle(url["expanded_url"])
-                            if twitter_handle and twitter_handle.lower() in map(str.lower, target_usernames):
-                                try:
-                                    handle_index = list(map(str.lower, target_usernames)).index(twitter_handle.lower())
-                                    matched_target_user_id = target_user_ids[handle_index]
-                                    matches.append({"user_id": user_id, "target_user_id": matched_target_user_id,
-                                                    "type": "indirect_like", "created_at": like["created_at"]})
+                        logging.info(f"Done collecting likes of {user_id=}")
+                    except tweepy.TweepyException as e:
+                        logging.warning(f"Tweepy error for {user_id=}: {e}. Retrying after 3 minutes.")
+                        time.sleep(60 * 3)  # Sleep for 3 minutes before retrying
+                        try:
+                            arr = []
+                            for response in paginator.flatten(limit=70):
+                                if len(arr) < 71:
+                                    arr.append(response)
+                                else:
                                     break
-                                except ValueError:
-                                    logging.error(f"Handle not found in target_usernames: {twitter_handle}")
-                                except IndexError:
-                                    logging.error(
-                                        f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
-
-            # Save parsed data
-            parsed_directory = os.path.join(data_dir, "matched_files")
-            if not os.path.exists(parsed_directory):
-                logging.warning(f"Configuration dir {parsed_directory} does not exist. Creating it now.")
-                os.makedirs(parsed_directory, exist_ok=True)
-            parsed_file_path = os.path.join(parsed_directory, f"pre-treatment_totalengagements_{user_id}.json")
-            with open(parsed_file_path, 'w') as parsed_file:
-                json.dump(matches, parsed_file, indent=4)
-                logging.info(f"Saved parsed pre-treatment engagements and likes for {user_id=}")
-
-            # Update eligibility status in the database
-            try:
-                engagement_count = len(matches)
-                passed = engagement_count > 0
-                database.store_eligibility(user_id, "pre-treatment_engagement", passed, engagement_count)
-                logging.info(
-                    f"Eligibility updated successfully for {user_id=}, passed={passed}, count={engagement_count}")
-                # Update w2_invitation table in the database
-                if engagement_count > 0:
-                    database.update_w2_invitation(user_id)
-
-            except Exception as e:
-                logging.error(f"Failed to update eligibility in DB for {user_id=}: {e}")
+                            json.dump(arr, outfile, indent=4)
+                            logging.info(f"Successfully collected pre-likes for {user_id=} after retry")
+                        except tweepy.TweepyException as retry_e:
+                            logging.error(f"Failed to collect pre-likes for {user_id=} after retry: {retry_e}")
+                            continue
+                    except json.JSONDecodeError as e:
+                        logging.error(f"Failed to encode pre-likes to JSON for {user_id=}: {e}")
+                        continue
+                    except Exception as e:
+                        logging.error(f"An unexpected error occurred while collecting pre-likes for {user_id=}: {e}")
+                        continue
 
         # After each chunk, wait for 15 minutes to respect the rate limit, but not after the last chunk
         if chunk_index < total_chunks:

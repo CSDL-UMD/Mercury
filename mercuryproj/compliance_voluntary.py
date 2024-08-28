@@ -144,6 +144,9 @@ def check_voluntary_compliance():
         logging.info('Now, mute compliance processing initiated')
 
         # Process compliance data and record violations
+        vsid = database.get_vsid(user_id)
+
+        # Process compliance data and record violations
         for user in all_data:
             is_muting = "connection_status" in user and "muting" in user.get("connection_status", [])
 
@@ -153,6 +156,7 @@ def check_voluntary_compliance():
 
                 database.record_compliance_voluntary_unmuting(
                     user_id=user_id,
+                    vsid=vsid,
                     target_user_id=user['id'],
                     target_username=user['username']
                 )

@@ -48,8 +48,11 @@ where = ["."]
 [project.scripts]
 eligibility-run = "mercuryproj.eligibility:main"
 pre-engagements-run = "mercuryproj.pre_engagements:main"
+pre-engagements-parse-run = "mercuryproj.pre_engagements_parse:main"
 post-engagements-run = "mercuryproj.post_engagements:main"
+post-engagements-parse-run = "mercuryproj.post_engagements_parse:main"
 post-endline-engagements-run = "mercuryproj.post_endline_engagements:main"
+post-endline-engagements-parse-run = "mercuryproj.post_endline_engagements_parse:main"
 muting-run = "mercuryproj.muting:main"
 unmuting-run = "mercuryproj.unmuting:main"
 compliance-run = "mercuryproj.compliance:main"

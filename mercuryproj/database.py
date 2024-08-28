@@ -546,7 +546,7 @@ def get_w3_users():
     In post_endline_engagements.py, post_endline_engagement()
     """
     # Calculate today's date
-    four_weeks_ago = datetime.now() - timedelta(weeks=4)  # Format as 'YYYY-MM-DD'
+    four_weeks_ago = datetime.now() - timedelta(days=1) - timedelta(weeks=4)  # Format as 'YYYY-MM-DD'
     four_weeks_ago_str = four_weeks_ago.strftime('%Y-%m-%d')
     connection = getdb()
     cursor = connection.cursor()
@@ -573,7 +573,7 @@ def store_eligibility(user_id, criteria, passed, num_count):
     INSERT INTO eligibility (user_id, criteria, passed, num_count) 
     VALUES (%s, %s, %s, %s) 
     ON CONFLICT (user_id, criteria) 
-    DO UPDATE SET passed = EXCLUDED.passed;
+    DO UPDATE SET passed = EXCLUDED.passed, num_count = EXCLUDED.num_count;
     """, (user_id, criteria, passed, num_count))
     logging.info(f"Saved or updated eligibility check result: {user_id=}, {criteria=}, {passed=}, {num_count=}")
     cursor.close()
@@ -657,7 +657,8 @@ def update_w2_invitation(user_id):
         sql_insert = """
         INSERT INTO w2_invitation (user_id, vsid) 
         VALUES (%s, %s)
-        ON CONFLICT (user_id) DO NOTHING
+        ON CONFLICT (user_id) DO UPDATE
+        SET vsid = EXCLUDED.vsid
         """
         cursor.execute(sql_insert, (user_id, vsid))
         logging.info(f"W2 Invitation updated for user_id: {user_id}")
@@ -873,20 +874,19 @@ def get_voluntary_unmute_condition():
     user_ids = [row[0] for row in cursor.fetchall()]
 
     cursor.close()
-    connection.close()
 
     # Return the list of user_ids
     return user_ids
 
 
-def record_compliance_voluntary_unmuting(user_id, target_user_id, target_username):
+def record_compliance_voluntary_unmuting(user_id, vsid, target_user_id, target_username):
     """
     Record a compliance fo voluntary unmuting in the database.
     """
     logging.info(f"Recording compliance violation for {user_id=}, target user: {target_username}")
 
     sql_insert = """
-    INSERT INTO compliance (user_id, vsid, target_user_id, target_username)
+    INSERT INTO compliance_voluntary (user_id, vsid, target_user_id, target_username)
     VALUES (%s, %s, %s, %s);
     """
 
@@ -894,7 +894,7 @@ def record_compliance_voluntary_unmuting(user_id, target_user_id, target_usernam
     cursor = connection.cursor()
 
     try:
-        cursor.execute(sql_insert, (user_id, target_user_id, target_username))
+        cursor.execute(sql_insert, (user_id, vsid, target_user_id, target_username))
         connection.commit()
         logging.info(f"Compliance for voluntary unmuting recorded successfully for {user_id=}")
     except Exception as e:

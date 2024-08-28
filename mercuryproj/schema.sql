@@ -101,7 +101,7 @@ DROP TABLE IF EXISTS w2_invitation;
 
 CREATE TABLE w2_invitation (
     id SERIAL PRIMARY KEY,
-    user_id VARCHAR(255),
+    user_id VARCHAR(255) UNIQUE,
     vsid VARCHAR(255),
     invitation_date DATE DEFAULT (CURRENT_DATE + INTERVAL '1 day')
 );
@@ -145,6 +145,7 @@ DROP TABLE IF EXISTS compliance_voluntary;
 CREATE TABLE compliance_voluntary (
     id SERIAL PRIMARY KEY,
     user_id VARCHAR(255),
+    vsid VARCHAR(255),
     target_user_id VARCHAR(255),
     target_username VARCHAR(255),
     created_at DATE DEFAULT CURRENT_DATE

@@ -500,7 +500,7 @@ def get_w3_session_start(user_id):
 
 def get_w1_users():
     """
-    In eligibility.py script
+    In eligibility.py + pre_engagements.py scripts
     """
     # Calculate yesterday's date
     yesterday = datetime.now() - timedelta(days=1)

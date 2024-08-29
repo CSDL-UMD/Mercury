@@ -85,6 +85,7 @@ def pre_treatment_engagement():
     However, get_liked_tweets() doesn't allow start_time or end_time.
     Thus, we cannot set time frame, and just collect up to 70 likes per user (for the main study), which can go way back in time.
     """
+    # Retrieve W1 respondents from yesterday (but only those with w1_status == True)
     user_id_list = database.get_w1_users()
 
     # Chunk user_id_list into chunks of 300
@@ -135,8 +136,8 @@ def pre_treatment_engagement():
                 headers = {"Authorization": f"Bearer {bearer_token}"}
 
                 # Create URL and parameters
-                # search_url = f"https://api.twitter.com/2/tweets/search/all"
-                search_url = f"https://api.twitter.com/2/tweets/search/recent"  # For testing
+                search_url = f"https://api.twitter.com/2/tweets/search/all"
+                # search_url = f"https://api.twitter.com/2/tweets/search/recent"  # For testing
 
                 query_params = {
                     'query': f'from:{username}',
@@ -144,8 +145,8 @@ def pre_treatment_engagement():
                     'user.fields': 'id,name,username,created_at,description,entities,location,pinned_tweet_id,profile_image_url,protected,public_metrics,url,verified',
                     'media.fields': 'media_key,type,url,duration_ms,height,preview_image_url,public_metrics,width',
                     'expansions': 'author_id,referenced_tweets.id,attachments.media_keys',
-                    #'start_time': start_time,
-                    #'end_time': end_time,
+                    'start_time': start_time,
+                    'end_time': end_time,
                     'max_results': 100  # Adjust: For the main study, we only collect max 100 tweets per user_id
                 }
 

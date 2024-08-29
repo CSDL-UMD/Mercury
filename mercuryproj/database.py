@@ -511,7 +511,7 @@ def get_w1_users():
     query = """
         SELECT user_id
         FROM mercury_user
-        WHERE DATE(session_start) = %s;
+        WHERE DATE(session_start) = %s AND w1_status = TRUE;
     """
     cursor.execute(query, (yesterday_str,))
     user_ids = [row[0] for row in cursor.fetchall()]

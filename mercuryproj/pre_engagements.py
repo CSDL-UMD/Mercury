@@ -115,7 +115,7 @@ def pre_treatment_engagement():
                 os.makedirs(directory_likes, exist_ok=True)
 
             # File path
-            engagement_file_path = os.path.join(directory_engagement, f"pre-engagemetns_{user_id}.json")
+            engagement_file_path = os.path.join(directory_engagement, f"pre-engagements_{user_id}.json")
             likes_file_path = os.path.join(directory_likes, f"pre-likes_{user_id}.json")
 
             # Check if file already exists

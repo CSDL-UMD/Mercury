@@ -117,7 +117,7 @@ def post_treatment_engagement():
                 os.makedirs(directory_hometimeline, exist_ok=True)
 
             # File path
-            engagement_file_path = os.path.join(directory_engagement, f"post-engagemetns_{user_id}.json")
+            engagement_file_path = os.path.join(directory_engagement, f"post-engagements_{user_id}.json")
             likes_file_path = os.path.join(directory_likes, f"post-likes_{user_id}.json")
             hometimeline_file_path = os.path.join(directory_hometimeline, f"post-hometimeline-{user_id}.json")
 
@@ -182,7 +182,7 @@ def post_treatment_engagement():
 
                 # Save tweets to file
                 try:
-                    file_path = os.path.join(directory_engagement, f"post-engagemetns_{user_id}.json")
+                    file_path = os.path.join(directory_engagement, f"post-engagements_{user_id}.json")
                     with open(file_path, 'w') as outfile:
                         json.dump(tweets, outfile, indent=4)
                         logging.info(f"Saved post_treatment tweets for user: {user_id} to {file_path}")

@@ -54,13 +54,13 @@ def process_user_id(user_id):
 
     def custom_sample(x):
         if x.name in ['MedTrue', 'MedFalse']:
-            return x.sample(n=min(len(x), 4))  # For 'MedTrue' and 'MedFalse', sample 4
+            return x.sample(n=min(len(x), 5))  # For 'MedTrue' and 'MedFalse', sample 5
         else:
-            return x.sample(n=min(len(x), 6))  # For others, sample 6
+            return x.sample(n=min(len(x), 5))  # For others, sample 5
 
     sampled_df = df_headline.groupby('type').apply(custom_sample).reset_index(drop=True)
 
-    wave = [2, 2, 3, 3, 2, 2, 3, 3, 1, 2, 2, 2, 3, 3, 1, 2, 2, 2, 3, 3, 1, 2, 2, 2, 3, 3, 1, 2, 2, 2, 3, 3]
+    wave = [2, 2, 2, 3, 3, 2, 2, 2, 3, 3, 2, 2, 2, 3, 3, 2, 2, 2, 3, 3, 2, 2, 2, 3, 3, 2, 2, 2, 3, 3]
 
     sampled_df['wave'] = wave
     sampled_df['user_id'] = user_id
@@ -226,12 +226,9 @@ def get_sampled_headlines():
                 'type': item['type']
             })
     resp_return = []
-    if wave == "1":
-        files_wave = [item['file'] for item in extracted_data if item['wave'] == 1]
-        resp_return = f"{files_wave[0]}$$${files_wave[1]}$$${files_wave[2]}$$${files_wave[3]}"
-    elif wave == "2":
+    if wave == "2":
         files_wave = [item['file'] for item in extracted_data if item['wave'] == 2]
-        resp_return = f"{files_wave[0]}$$${files_wave[1]}$$${files_wave[2]}$$${files_wave[3]}$$${files_wave[4]}$$${files_wave[5]}$$${files_wave[6]}$$${files_wave[7]}$$${files_wave[8]}$$${files_wave[9]}$$${files_wave[10]}$$${files_wave[11]}$$${files_wave[12]}$$${files_wave[13]}$$${files_wave[14]}$$${files_wave[15]}"
+        resp_return = f"{files_wave[0]}$$${files_wave[1]}$$${files_wave[2]}$$${files_wave[3]}$$${files_wave[4]}$$${files_wave[5]}$$${files_wave[6]}$$${files_wave[7]}$$${files_wave[8]}$$${files_wave[9]}$$${files_wave[10]}$$${files_wave[11]}$$${files_wave[12]}$$${files_wave[13]}$$${files_wave[14]}$$${files_wave[15]}$$${files_wave[16]}$$${files_wave[17]}"
     elif wave == "3":
         files_wave = [item['file'] for item in extracted_data if item['wave'] == 3]
         resp_return = f"{files_wave[0]}$$${files_wave[1]}$$${files_wave[2]}$$${files_wave[3]}$$${files_wave[4]}$$${files_wave[5]}$$${files_wave[6]}$$${files_wave[7]}$$${files_wave[8]}$$${files_wave[9]}$$${files_wave[10]}$$${files_wave[11]}"

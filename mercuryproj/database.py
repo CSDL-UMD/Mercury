@@ -282,22 +282,36 @@ def store_w2_randomized_group(user_id, w2_randomized_group, random_price, sessio
     # Log the incoming data
     logging.info(f"Storing W2 randomized group: user_id={user_id}, group={w2_randomized_group}, session_start={session_start}")
 
+    # Get database connection
+    connection = getdb()
+    cursor = connection.cursor()
+
+    # Fetch vsid from mercury_user table
+    fetch_vsid_sql = """
+        SELECT vsid FROM mercury_user WHERE user_id = %s
+        """
+    cursor.execute(fetch_vsid_sql, (user_id,))
+    vsid_result = cursor.fetchone()
+
+    if not vsid_result:
+        logging.error(f"No vsid found for {user_id=}. Arbitrary vsid. Need to check manually.")
+        vsid = "should_update"
+    else:
+        vsid = vsid_result[0]
+
     # SQL query for upserting the data (PostgreSQL version)
     sql_upsert = """
-    INSERT INTO w2_randomized_group (user_id, w2_randomized_group, random_price, session_start) 
-    VALUES (%s, %s, %s, %s)
+    INSERT INTO w2_randomized_group (user_id, vsid, w2_randomized_group, random_price, session_start) 
+    VALUES (%s, %s, %s, %s, %s)
     ON CONFLICT (user_id) DO UPDATE SET 
+    vsid = EXCLUDED.vsid,
     w2_randomized_group = EXCLUDED.w2_randomized_group,
     random_price = EXCLUDED.random_price,
     session_start = EXCLUDED.session_start;
     """
 
-    # Get database connection
-    connection = getdb()
-    cursor = connection.cursor()
-
     try:
-        cursor.execute(sql_upsert, (user_id, w2_randomized_group, random_price, session_start))
+        cursor.execute(sql_upsert, (user_id, vsid, w2_randomized_group, random_price, session_start))
         connection.commit()
         logging.info(f"W2 randomized group upserted successfully for user_id: {user_id}")
     except Exception as e:

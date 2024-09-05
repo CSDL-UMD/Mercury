@@ -66,6 +66,7 @@ DROP TABLE IF EXISTS w2_randomized_group;
 CREATE TABLE w2_randomized_group (
     id SERIAL PRIMARY KEY,
     user_id VARCHAR(255) UNIQUE,
+    vsid VARCHAR(255),
     w2_randomized_group VARCHAR(255),
     random_price NUMERIC,
     session_start TIMESTAMP

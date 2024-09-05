@@ -7,6 +7,9 @@ from flask import g, jsonify, current_app
 
 from .configuration import configuration
 
+from mercurylogger_utils import get_logger
+logger = get_logger("database")
+
 
 def getdb():
     if 'db' not in g:
@@ -17,7 +20,8 @@ def getdb():
             import sys
             sys.exit(1)
 
-        logging.info(f'Connecting to database {db_params["dbname"]} on {db_params["host"]}:{db_params["port"]}.')
+        logging.info(f'Connecting to database {db_params["dbname"]} on {
+                     db_params["host"]}:{db_params["port"]}.')
         conn = psycopg.connect(host=db_params["host"],
                                port=db_params["port"],
                                dbname=db_params["dbname"],
@@ -67,7 +71,8 @@ def insert_user(user_id, screen_name, access_token, access_token_secret, oauth_t
     connection = getdb()
     cursor = connection.cursor()
     # Check if the user already exists in the database
-    cursor.execute("SELECT COUNT(*) FROM mercury_user WHERE user_id=%s;", (user_id,))
+    cursor.execute(
+        "SELECT COUNT(*) FROM mercury_user WHERE user_id=%s;", (user_id,))
     count_exists = cursor.fetchone()[0]
     if count_exists > 0:
         # Update existing user
@@ -84,12 +89,14 @@ def insert_user(user_id, screen_name, access_token, access_token_secret, oauth_t
 
 
 def auth_temp(oauth_token, oauth_token_secret):
-    logging.info(f"Insert temporary oauth tokens: {oauth_token=}, {oauth_token_secret=}")
+    logging.info(f"Insert temporary oauth tokens: {
+                 oauth_token=}, {oauth_token_secret=}")
     sql_insert = """INSERT INTO auth_temp(oauth_token, oauth_token_secret) VALUES(%s,%s);"""
     connection = getdb()
     cursor = connection.cursor()
     cursor.execute(sql_insert, (oauth_token, oauth_token_secret))
-    logging.info(f"Temporary oauth tokens inserted successfully: {oauth_token=}, {oauth_token_secret=}")
+    logging.info(f"Temporary oauth tokens inserted successfully: {
+                 oauth_token=}, {oauth_token_secret=}")
     cursor.close()
     connection.commit()
 
@@ -105,10 +112,12 @@ def get_oauth_token_secret(oauth_token):
     result = cursor.fetchone()
     if result:
         oauth_token_secret = result[0]
-        logging.info(f"Retrieved oauth_token_secret successfully for: {oauth_token=}")
+        logging.info(f"Retrieved oauth_token_secret successfully for: {
+                     oauth_token=}")
         return oauth_token_secret
     else:
-        logging.warning(f"No matching oauth_token_secret found for: {oauth_token=}")
+        logging.warning(
+            f"No matching oauth_token_secret found for: {oauth_token=}")
     cursor.close()
 
 
@@ -152,7 +161,8 @@ def get_access_token(user_id):
     logging.info(f"Getting access token for {user_id=}")
     connection = getdb()
     cursor = connection.cursor()
-    cursor.execute("SELECT access_token, access_token_secret FROM mercury_user WHERE user_id=%s;", (user_id,))
+    cursor.execute(
+        "SELECT access_token, access_token_secret FROM mercury_user WHERE user_id=%s;", (user_id,))
     result = cursor.fetchone()
     if result:
         access_token = result[0]
@@ -192,10 +202,12 @@ def save_exposure(user_id, muted_account1, muted_account2, muted_account3, unmut
                        (user_id, muted_account1, muted_account2, muted_account3, unmuted_account1, unmuted_account2, unmuted_account3))
         connection.commit()
 
-        logging.info(f"Exposure data saved successfully for user_id: {user_id}")
+        logging.info(
+            f"Exposure data saved successfully for user_id: {user_id}")
     except Exception as e:
         # Log the error
-        logging.error(f"Error saving exposure data for user_id {user_id}: {str(e)}")
+        logging.error(f"Error saving exposure data for user_id {
+                      user_id}: {str(e)}")
     finally:
         cursor.close()
 
@@ -222,13 +234,15 @@ def get_exposure(user_id):
                 "unmuted_account2": result[4],
                 "unmuted_account3": result[5]
             }
-            logging.info(f"Successfully retrieved exposure data for {user_id=}")
+            logging.info(
+                f"Successfully retrieved exposure data for {user_id=}")
             return exposure_data
         else:
             logging.warning(f"No exposure data found for {user_id=}")
             return None
     except Exception as e:
-        logging.error(f"Error retrieving exposure data for {user_id=}: {str(e)}")
+        logging.error(f"Error retrieving exposure data for {
+                      user_id=}: {str(e)}")
         return None
     finally:
         cursor.close()
@@ -245,7 +259,8 @@ def store_follow_politifact(user_id, success, session_start):
     connection = getdb()
     cursor = connection.cursor()
     # Check if the user already exists in the database
-    cursor.execute("SELECT COUNT(*) FROM following_politifact WHERE user_id=%s;", (user_id,))
+    cursor.execute(
+        "SELECT COUNT(*) FROM following_politifact WHERE user_id=%s;", (user_id,))
     count_exists = cursor.fetchone()[0]
     if count_exists > 0:
         # Update existing user
@@ -280,7 +295,8 @@ def store_w2_randomized_group(user_id, w2_randomized_group, random_price, sessio
         None
     """
     # Log the incoming data
-    logging.info(f"Storing W2 randomized group: user_id={user_id}, group={w2_randomized_group}, session_start={session_start}")
+    logging.info(f"Storing W2 randomized group: user_id={user_id}, group={
+                 w2_randomized_group}, session_start={session_start}")
 
     # Get database connection
     connection = getdb()
@@ -294,7 +310,8 @@ def store_w2_randomized_group(user_id, w2_randomized_group, random_price, sessio
     vsid_result = cursor.fetchone()
 
     if not vsid_result:
-        logging.error(f"No vsid found for {user_id=}. Arbitrary vsid. Need to check manually.")
+        logging.error(f"No vsid found for {
+                      user_id=}. Arbitrary vsid. Need to check manually.")
         vsid = "should_update"
     else:
         vsid = vsid_result[0]
@@ -311,11 +328,14 @@ def store_w2_randomized_group(user_id, w2_randomized_group, random_price, sessio
     """
 
     try:
-        cursor.execute(sql_upsert, (user_id, vsid, w2_randomized_group, random_price, session_start))
+        cursor.execute(sql_upsert, (user_id, vsid,
+                       w2_randomized_group, random_price, session_start))
         connection.commit()
-        logging.info(f"W2 randomized group upserted successfully for user_id: {user_id}")
+        logging.info(
+            f"W2 randomized group upserted successfully for user_id: {user_id}")
     except Exception as e:
-        logging.error(f"Error upserting W2 randomized group for {user_id=}: {str(e)}")
+        logging.error(f"Error upserting W2 randomized group for {
+                      user_id=}: {str(e)}")
     finally:
         cursor.close()
 
@@ -328,7 +348,8 @@ def store_vsid(user_id, vsid):
     connection = getdb()
     cursor = connection.cursor()
     # Check:
-    cursor.execute("SELECT vsid FROM mercury_user WHERE user_id = %s", (user_id,))
+    cursor.execute(
+        "SELECT vsid FROM mercury_user WHERE user_id = %s", (user_id,))
     result = cursor.fetchone()
 
     if result and result[0] is not None and result[0] != vsid:
@@ -337,9 +358,11 @@ def store_vsid(user_id, vsid):
 
     # Store vsid otherwise:
     if result:
-        cursor.execute("UPDATE mercury_user SET vsid = %s WHERE user_id = %s", (vsid, user_id))
+        cursor.execute(
+            "UPDATE mercury_user SET vsid = %s WHERE user_id = %s", (vsid, user_id))
     else:
-        cursor.execute("INSERT INTO mercury_user (user_id, vsid) VALUES (%s, %s)", (user_id, vsid))
+        cursor.execute(
+            "INSERT INTO mercury_user (user_id, vsid) VALUES (%s, %s)", (user_id, vsid))
     cursor.close()
     connection.commit()
     return "Success"
@@ -360,10 +383,12 @@ def update_w1_status(user_id, vsid, session_start):
         """, (session_start, user_id, vsid))
 
         if cursor.rowcount == 0:
-            logging.error(f"No matching user_id and vsid pair found for {user_id=}, {vsid=}")
+            logging.error(f"No matching user_id and vsid pair found for {
+                          user_id=}, {vsid=}")
         else:
             connection.commit()
-            logging.info(f"Successfully updated W1 status for {user_id=}, {vsid=}")
+            logging.info(f"Successfully updated W1 status for {
+                         user_id=}, {vsid=}")
     except Exception as e:
         logging.error(f"Error updating W1 status: {str(e)}")
     finally:
@@ -379,7 +404,8 @@ def get_randomized_group(user_id):
     logging.info(f"Get randomized group for {user_id=}")
     connection = getdb()
     cursor = connection.cursor()
-    cursor.execute("SELECT w2_randomized_group FROM w2_randomized_group WHERE user_id=%s;", (user_id,))
+    cursor.execute(
+        "SELECT w2_randomized_group FROM w2_randomized_group WHERE user_id=%s;", (user_id,))
     result = cursor.fetchone()[0]
     cursor.close()
     return result
@@ -395,7 +421,8 @@ def store_mute_state(user_id, state):
     connection = getdb()
     cursor = connection.cursor()
     # Check if the user already exists in the database
-    cursor.execute("SELECT COUNT(*) FROM mute_group WHERE user_id=%s;", (user_id,))
+    cursor.execute(
+        "SELECT COUNT(*) FROM mute_group WHERE user_id=%s;", (user_id,))
     count_exists = cursor.fetchone()[0]
     if count_exists > 0:
         # Update existing user
@@ -430,7 +457,8 @@ def store_mute_result(user_id, target_user_id, mute_result, timestamp):
     """
     In muting.py and unmuting.py scripts
     """
-    logging.info(f"Store {user_id=}'s mute result: {target_user_id=}, {mute_result=}, {timestamp=}")
+    logging.info(f"Store {user_id=}'s mute result: {
+                 target_user_id=}, {mute_result=}, {timestamp=}")
     connection = getdb()
     cursor = connection.cursor()
     # Insert the data into the mute_result table or update it if the same user_id and target_user_id combination exists
@@ -440,7 +468,8 @@ def store_mute_result(user_id, target_user_id, mute_result, timestamp):
     ON CONFLICT (user_id, target_user_id) 
     DO UPDATE SET mute_result = EXCLUDED.mute_result, timestamp = EXCLUDED.timestamp;
     """
-    cursor.execute(sql_insert, (user_id, target_user_id, mute_result, timestamp))
+    cursor.execute(
+        sql_insert, (user_id, target_user_id, mute_result, timestamp))
     connection.commit()
     cursor.close()
     return jsonify(message="Data inserted successfully")
@@ -538,7 +567,8 @@ def get_w2_users():
     """
     In post_engagements.py, post_treatment_engagement()
     """
-    four_weeks_ago = datetime.now() - timedelta(days=1) - timedelta(weeks=4)  # Format as 'YYYY-MM-DD'
+    four_weeks_ago = datetime.now() - timedelta(days=1) - \
+        timedelta(weeks=4)  # Format as 'YYYY-MM-DD'
     four_weeks_ago_str = four_weeks_ago.strftime('%Y-%m-%d')
     connection = getdb()
     cursor = connection.cursor()
@@ -560,7 +590,8 @@ def get_w3_users():
     In post_endline_engagements.py, post_endline_engagement()
     """
     # Calculate today's date
-    four_weeks_ago = datetime.now() - timedelta(days=1) - timedelta(weeks=4)  # Format as 'YYYY-MM-DD'
+    four_weeks_ago = datetime.now() - timedelta(days=1) - \
+        timedelta(weeks=4)  # Format as 'YYYY-MM-DD'
     four_weeks_ago_str = four_weeks_ago.strftime('%Y-%m-%d')
     connection = getdb()
     cursor = connection.cursor()
@@ -589,7 +620,8 @@ def store_eligibility(user_id, criteria, passed, num_count):
     ON CONFLICT (user_id, criteria) 
     DO UPDATE SET passed = EXCLUDED.passed, num_count = EXCLUDED.num_count;
     """, (user_id, criteria, passed, num_count))
-    logging.info(f"Saved or updated eligibility check result: {user_id=}, {criteria=}, {passed=}, {num_count=}")
+    logging.info(f"Saved or updated eligibility check result: {
+                 user_id=}, {criteria=}, {passed=}, {num_count=}")
     cursor.close()
     connection.commit()
 
@@ -598,7 +630,8 @@ def store_w3_randomized_group(user_id, w2_randomized_group, w3_randomized_group,
     """
     In auth_qualtrics.py script, store_w3_group()
     """
-    logging.info(f"W3 randomized group update: {user_id=}, {w3_randomized_group=}, {random_price=}, {session_start=}")
+    logging.info(f"W3 randomized group update: {user_id=}, {
+                 w3_randomized_group=}, {random_price=}, {session_start=}")
     sql_insert = """INSERT INTO w3_randomized_group 
                         (user_id, w2_randomized_group, w3_randomized_group, random_price, session_start) 
                         VALUES(%s, %s, %s, %s, %s);"""
@@ -608,15 +641,18 @@ def store_w3_randomized_group(user_id, w2_randomized_group, w3_randomized_group,
     connection = getdb()
     cursor = connection.cursor()
     # Check if the user already exists in the database
-    cursor.execute("SELECT COUNT(*) FROM w3_randomized_group WHERE user_id=%s;", (user_id,))
+    cursor.execute(
+        "SELECT COUNT(*) FROM w3_randomized_group WHERE user_id=%s;", (user_id,))
     count_exists = cursor.fetchone()[0]
     if count_exists > 0:
         # Update existing user
-        cursor.execute(sql_update, (w2_randomized_group, w3_randomized_group, random_price, session_start, user_id))
+        cursor.execute(sql_update, (w2_randomized_group,
+                       w3_randomized_group, random_price, session_start, user_id))
         logging.info(f"Randomized group updated successfully: {user_id=}")
     else:
         # Insert new user
-        cursor.execute(sql_insert, (user_id, w2_randomized_group, w3_randomized_group, random_price, session_start))
+        cursor.execute(sql_insert, (user_id, w2_randomized_group,
+                       w3_randomized_group, random_price, session_start))
         logging.info(f"Randomized group inserted successfully: {user_id=}")
     cursor.close()
     connection.commit()
@@ -628,7 +664,8 @@ def get_vsid(user_id):
     """
     connection = getdb()
     cursor = connection.cursor()
-    cursor.execute("SELECT vsid FROM mercury_user WHERE user_id=%s;", (user_id,))
+    cursor.execute(
+        "SELECT vsid FROM mercury_user WHERE user_id=%s;", (user_id,))
     result = cursor.fetchone()
     if result:
         vsid = result[0]
@@ -641,7 +678,8 @@ def update_w2_invitation(user_id):
     In pre_engagements.py script, this is called if user_id has non-zero engagement.
     This function fetches the vsid and updates W2 Invitation if eligibility criteria are met.
     """
-    logging.info(f"Updating W2 Invitation only for those who passed eligibility criteria")
+    logging.info(
+        f"Updating W2 Invitation only for those who passed eligibility criteria")
     connection = getdb()
     cursor = connection.cursor()
 
@@ -653,7 +691,8 @@ def update_w2_invitation(user_id):
     vsid_result = cursor.fetchone()
 
     if not vsid_result:
-        logging.error(f"No vsid found for {user_id=}. Arbitrary vsid. Need to check manually.")
+        logging.error(f"No vsid found for {
+                      user_id=}. Arbitrary vsid. Need to check manually.")
         vsid = "should_update"
     else:
         vsid = vsid_result[0]
@@ -677,7 +716,8 @@ def update_w2_invitation(user_id):
         cursor.execute(sql_insert, (user_id, vsid))
         logging.info(f"W2 Invitation updated for user_id: {user_id}")
     else:
-        logging.info(f"Account creation date not met for {user_id=}. Skipping W2 Invitation update.")
+        logging.info(f"Account creation date not met for {
+                     user_id=}. Skipping W2 Invitation update.")
     connection.commit()
     cursor.close()
 
@@ -715,7 +755,8 @@ def update_w3_invitation(user_id):
         vsid_result = cursor.fetchone()
 
         if not vsid_result:
-            logging.error(f"No vsid found for {user_id=}. Using 'should_update' as fallback.")
+            logging.error(f"No vsid found for {
+                          user_id=}. Using 'should_update' as fallback.")
             vsid = "should_update"
         else:
             vsid = vsid_result[0]
@@ -730,7 +771,8 @@ def update_w3_invitation(user_id):
         group_price_result = cursor.fetchone()
 
         if not group_price_result:
-            logging.error(f"No w2_randomized_group and random price found for {user_id=}. Using default values.")
+            logging.error(f"No w2_randomized_group and random price found for {
+                          user_id=}. Using default values.")
             w2_randomized_group = "unknown"
             payment = 100
         else:
@@ -748,7 +790,8 @@ def update_w3_invitation(user_id):
         INSERT INTO w3_invitation (user_id, vsid, payment, compliance, w2_randomized_group)
         VALUES (%s, %s, %s, %s, %s)
         """
-        cursor.execute(insert_query, (user_id, vsid, payment, compliance, w2_randomized_group))
+        cursor.execute(insert_query, (user_id, vsid, payment,
+                       compliance, w2_randomized_group))
         connection.commit()
         logging.info(f"W3 Invitation updated for {user_id=}")
 
@@ -790,7 +833,8 @@ def update_w3_post_pay(user_id):
         cursor.execute(vsid_query, (user_id,))
         vsid_result = cursor.fetchone()
         if not vsid_result:
-            logging.error(f"No vsid found for {user_id=} in post-w3 pay. Using 'should_update' as fallback.")
+            logging.error(f"No vsid found for {
+                          user_id=} in post-w3 pay. Using 'should_update' as fallback.")
             vsid = "should_update"
         else:
             vsid = vsid_result[0]
@@ -803,7 +847,8 @@ def update_w3_post_pay(user_id):
         cursor.execute(group_price_query, (user_id,))
         group_price_result = cursor.fetchone()
         if not group_price_result:
-            logging.info(f"No w3_randomized_group and random price found for {user_id=}. Skipping update.")
+            logging.info(f"No w3_randomized_group and random price found for {
+                         user_id=}. Skipping update.")
             return
         w3_randomized_group, payment = group_price_result
 
@@ -824,9 +869,11 @@ def update_w3_post_pay(user_id):
             logging.info(f"Post-W3 payment info updated for {user_id=}")
         else:
             if not compliance:
-                logging.info(f"{user_id=} exists in compliance violation table. Skipping post-W3 payment info update.")
+                logging.info(
+                    f"{user_id=} exists in compliance violation table. Skipping post-W3 payment info update.")
             elif w3_randomized_group != 'p_random_Keep':
-                logging.info(f"{user_id=} is not in 'p_random_Keep' group. Skipping post-W3 payment info update.")
+                logging.info(
+                    f"{user_id=} is not in 'p_random_Keep' group. Skipping post-W3 payment info update.")
 
     except Exception as e:
         logging.error(f"Error updating w3_post_pay: {str(e)}")
@@ -849,7 +896,8 @@ def record_compliance_violation(user_id, vsid, target_user_id, target_username, 
 
     Returns: None
     """
-    logging.info(f"Recording compliance violation for {user_id=}, target user: {target_username}, case_tag: {case_tag}")
+    logging.info(f"Recording compliance violation for {user_id=}, target user: {
+                 target_username}, case_tag: {case_tag}")
 
     sql_insert = """
     INSERT INTO compliance (user_id, vsid, target_user_id, target_username, case_tag)
@@ -860,11 +908,14 @@ def record_compliance_violation(user_id, vsid, target_user_id, target_username, 
     cursor = connection.cursor()
 
     try:
-        cursor.execute(sql_insert, (user_id, vsid, target_user_id, target_username, case_tag))
+        cursor.execute(sql_insert, (user_id, vsid,
+                       target_user_id, target_username, case_tag))
         connection.commit()
-        logging.info(f"Compliance violation recorded successfully for {user_id=}")
+        logging.info(
+            f"Compliance violation recorded successfully for {user_id=}")
     except Exception as e:
-        logging.error(f"Error recording compliance violation for {user_id=}: {str(e)}")
+        logging.error(f"Error recording compliance violation for {
+                      user_id=}: {str(e)}")
     finally:
         cursor.close()
 
@@ -897,7 +948,8 @@ def record_compliance_voluntary_unmuting(user_id, vsid, target_user_id, target_u
     """
     Record a compliance fo voluntary unmuting in the database.
     """
-    logging.info(f"Recording compliance violation for {user_id=}, target user: {target_username}")
+    logging.info(f"Recording compliance violation for {
+                 user_id=}, target user: {target_username}")
 
     sql_insert = """
     INSERT INTO compliance_voluntary (user_id, vsid, target_user_id, target_username)
@@ -908,10 +960,13 @@ def record_compliance_voluntary_unmuting(user_id, vsid, target_user_id, target_u
     cursor = connection.cursor()
 
     try:
-        cursor.execute(sql_insert, (user_id, vsid, target_user_id, target_username))
+        cursor.execute(sql_insert, (user_id, vsid,
+                       target_user_id, target_username))
         connection.commit()
-        logging.info(f"Compliance for voluntary unmuting recorded successfully for {user_id=}")
+        logging.info(
+            f"Compliance for voluntary unmuting recorded successfully for {user_id=}")
     except Exception as e:
-        logging.error(f"Error recording compliance for voluntary unmuting for {user_id=}: {str(e)}")
+        logging.error(f"Error recording compliance for voluntary unmuting for {
+                      user_id=}: {str(e)}")
     finally:
         cursor.close()

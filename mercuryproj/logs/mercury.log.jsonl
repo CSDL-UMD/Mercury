@@ -1,4 +1,0 @@
-{"level": "DEBUG", "message": "debug message", "timestamp": "2024-01-29T14:21:01.309410+00:00", "logger": "root", "module": "throttle", "function": "main", "line": 40, "thread_name": "MainThread"}
-{"level": "WARNING", "message": "debug message", "timestamp": "2024-01-29T14:21:01.309648+00:00", "logger": "root", "module": "throttle", "function": "main", "line": 41, "thread_name": "MainThread"}
-{"level": "DEBUG", "message": "debug message", "timestamp": "2024-01-29T21:56:58.576582+00:00", "logger": "root", "module": "thtle", "function": "main", "line": 36, "thread_name": "MainThread"}
-{"level": "WARNING", "message": "debug message", "timestamp": "2024-01-29T21:56:58.577023+00:00", "logger": "root", "module": "thtle", "function": "main", "line": 37, "thread_name": "MainThread"}

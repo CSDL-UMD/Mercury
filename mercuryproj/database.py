@@ -575,8 +575,7 @@ def get_w3_users():
     In post_endline_engagements.py, post_endline_engagement()
     """
     # Calculate today's date
-    four_weeks_ago = datetime.now() - timedelta(days=1) - \
-        timedelta(weeks=4)  # Format as 'YYYY-MM-DD'
+    four_weeks_ago = datetime.now() - timedelta(days=1) - timedelta(weeks=4)  # Format as 'YYYY-MM-DD'
     four_weeks_ago_str = four_weeks_ago.strftime('%Y-%m-%d')
     connection = getdb()
     cursor = connection.cursor()
@@ -587,6 +586,29 @@ def get_w3_users():
         WHERE DATE(session_start) = %s;
     """
     cursor.execute(query, (four_weeks_ago_str,))
+    user_ids = [row[0] for row in cursor.fetchall()]
+    cursor.close()
+    # Return the list of user_ids
+    return user_ids
+
+
+def get_w3_users_at_once():
+    """
+    In post_endline_at_once_parse.py, post_endline_at_once_parse.py
+    """
+    # Target date: March 25, 2025 (We will turn off Pro in the evening of March 25)
+    target_date = datetime(2025, 3, 25) - timedelta(weeks=4)
+    target_date_str = target_date.strftime('%Y-%m-%d')
+
+    connection = getdb()
+    cursor = connection.cursor()
+    # SQL query to select user_ids where session_start is from 4 weeks from today
+    query = """
+        SELECT user_id
+        FROM w3_randomized_group 
+        WHERE DATE(session_start) > %s;
+    """
+    cursor.execute(query, (target_date_str,))
     user_ids = [row[0] for row in cursor.fetchall()]
     cursor.close()
     # Return the list of user_ids

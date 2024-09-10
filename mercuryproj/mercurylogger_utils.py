@@ -1,13 +1,8 @@
 import datetime as dt
 import json
 import logging
-from typing import override
-
-
-import atexit
 import logging.config
 import logging.handlers
-import pathlib
 
 LOG_RECORD_BUILTIN_ATTRS = {
     "args",
@@ -45,7 +40,6 @@ class MyJSONFormatter(logging.Formatter):
         super().__init__()
         self.fmt_keys = fmt_keys if fmt_keys is not None else {}
 
-    @override
     def format(self, record: logging.LogRecord) -> str:
         message = self._prepare_log_dict(record)
         return json.dumps(message, default=str)
@@ -79,24 +73,85 @@ class MyJSONFormatter(logging.Formatter):
 
 
 class NonErrorFilter(logging.Filter):
-    @override
     def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
         return record.levelno <= logging.INFO
 
 
 class MoreThanInfoFilter(logging.Filter):
-    @override
     def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
         return record.levelno > logging.INFO
 
 
+class AuthQualtricsFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
+        return record.name.startswith('mercury.auth_qualtrics')
+
+
 class ComplianceFilter(logging.Filter):
-    @override
     def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
         return record.name.startswith('mercury.compliance')
 
 
+class ComplianceVoluntaryFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
+        return record.name.startswith('mercury.compliance_voluntary')
+
+
 class DatabaseFilter(logging.Filter):
-    @override
     def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
         return record.name.startswith('mercury.database')
+
+
+class EligibilityFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
+        return record.name.startswith('mercury.eligibility')
+
+
+class MutingFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
+        return record.name.startswith('mercury.muting')
+
+
+class UnmutingFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
+        return record.name.startswith('mercury.unmuting')
+
+
+class PreEngagementsFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
+        return record.name.startswith('mercury.pre_engagements')
+
+
+class PostEngagementsFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
+        return record.name.startswith('mercury.post_engagements')
+
+
+class PostEndlineEngagementsFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
+        return record.name.startswith('mercury.post_endline_engagements')
+
+
+class PreEngagementsParseFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
+        return record.name.startswith('mercury.pre_engagements_parse')
+
+
+class PostEngagementsParseFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
+        return record.name.startswith('mercury.post_engagements_parse')
+
+
+class PostEndlineEngagementsParseFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
+        return record.name.startswith('mercury.post_endline_engagements_parse')
+
+
+class PostEndlineAtOnceFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
+        return record.name.startswith('mercury.post_endline_at_once')
+
+
+class PostEndlineAtOnceParseFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool | logging.LogRecord:
+        return record.name.startswith('mercury.post_endline_at_once_parse')

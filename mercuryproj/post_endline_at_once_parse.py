@@ -1,5 +1,6 @@
 """
-This module parses post-endline engagements and likes for participants on Twitter.
+This module parses post-treatment engagements and likes for participants on Twitter.
+(Only after we turn off the Pro account on March 25)
 - For each account:
     - Parses collected tweets and likes for direct and indirect interactions with target sources.
 
@@ -61,10 +62,12 @@ def load_json_files(directory, user_id, file_pattern):
 
 
 def post_endline_engagement_parse():
-    # Get all users from 4 weeks from yesterday (Those who just completed 4 weeks post-endline period)
-    user_id_list = database.get_w3_users()
+    # Get all users from 4 weeks from yesterday (Those who just completed 4 weeks post-treatment period)
+    user_id_list = database.get_w3_users_at_once()
 
     for user_id in user_id_list:
+        logging.info(f"Collecting post-treatment tweets for {user_id=}")
+
         # Load collected data
         tweets_dir = os.path.join(data_dir, "engagements", "endline-engagements")
         likes_dir = os.path.join(data_dir, "engagements", "endline-likes")

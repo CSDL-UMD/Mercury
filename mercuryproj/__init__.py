@@ -23,7 +23,7 @@ def create_app():
     app = Flask(__name__)
 
     app.debug = True
-    setup_logger()
+    # setup_logger()
     from . import database
     database.init_app(app)
 

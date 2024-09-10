@@ -7,8 +7,7 @@ from flask import g, jsonify, current_app
 
 from .configuration import configuration
 
-from mercurylogger_utils import get_logger
-logger = get_logger("database")
+logger = logging.getLogger("mercury.database")
 
 
 def getdb():

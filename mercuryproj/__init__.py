@@ -2,13 +2,28 @@ from flask import Flask
 import logging
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+import json
+import logging.config
+import logging.handlers
+import pathlib
+
+
+def setup_logger():
+    logger = logging.getLogger("mercury")
+    config_file = pathlib.Path("logging_configs/configs.json")
+    with open(config_file) as f_in:
+        config = json.load(f_in)
+
+    logging.config.dictConfig(config)
+
+    return logger
+
 
 def create_app():
     app = Flask(__name__)
 
     app.debug = True
-    logging.basicConfig(level=logging.INFO)
-
+    setup_logger()
     from . import database
     database.init_app(app)
 

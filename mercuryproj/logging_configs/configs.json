@@ -59,7 +59,7 @@
       "filters": [
         "database_filter"
       ]
-    },
+    }
   },
   "loggers": {
     "root": {

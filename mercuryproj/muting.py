@@ -30,6 +30,7 @@ from . import create_app
 from . import database
 from .configuration import configuration
 
+logger = logging.getLogger("mercury.muting")
 
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
@@ -37,7 +38,7 @@ cred = configuration['twitterapp']
 
 data_dir = user_data_dir(appname=__package__)
 if not os.path.exists(data_dir):
-    logging.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
+    logger.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
     os.mkdir(data_dir)
 
 
@@ -72,7 +73,7 @@ def get_muting_list_for_user(user_id):
         file_path = f'{directory}/muted_accounts_for_{user_id}.json'
 
         if not os.path.exists(file_path):
-            logging.error(f"Muting list file not found for {user_id=}")
+            logger.error(f"Muting list file not found for {user_id=}")
             return []
 
         with open(file_path, 'r') as f:
@@ -82,13 +83,13 @@ def get_muting_list_for_user(user_id):
         target_user_ids = [item['target_user_id'] for item in sampled_muting_list]
         return target_user_ids
     except FileNotFoundError:
-        logging.error(f"Muting list file not found for {user_id=}")
+        logger.error(f"Muting list file not found for {user_id=}")
     except json.JSONDecodeError:
-        logging.error(f"Invalid JSON in muting list file for {user_id=}")
+        logger.error(f"Invalid JSON in muting list file for {user_id=}")
     except KeyError:
-        logging.error(f"Unexpected data structure in muting list for {user_id=}")
+        logger.error(f"Unexpected data structure in muting list for {user_id=}")
     except Exception as e:
-        logging.error(f"Unexpected error in get_muting_list_for_user for {user_id=}: {e}")
+        logger.error(f"Unexpected error in get_muting_list_for_user for {user_id=}: {e}")
     return []
 
 
@@ -143,18 +144,18 @@ def process_user_chunks(user_id, chunked_target_user_ids):
                     response = client.mute(target_user_id=target_user_id)
                     success_mute_status = str(response['data']['muting'])
                     database.store_mute_result(user_id, target_user_id, success_mute_status, datetime.now())
-                    logging.info(f"Successfully muted {target_user_id=} for {user_id=}")
+                    logger.info(f"Successfully muted {target_user_id=} for {user_id=}")
                 except Unauthorized:
-                    logging.error(f"Unauthorized: Authentication failed for {user_id=}")
+                    logger.error(f"Unauthorized: Authentication failed for {user_id=}")
                     database.store_mute_result(user_id, target_user_id, "Failed - Unauthorized", datetime.now())
                 except Forbidden:
-                    logging.error(f"Forbidden: The request is understood, but it has been refused for {user_id=}")
+                    logger.error(f"Forbidden: The request is understood, but it has been refused for {user_id=}")
                     database.store_mute_result(user_id, target_user_id, "Failed - Forbidden", datetime.now())
                 except NotFound:
-                    logging.error(f"Not Found: {target_user_id=} does not exist")
+                    logger.error(f"Not Found: {target_user_id=} does not exist")
                     database.store_mute_result(user_id, target_user_id, "Failed - Not Found", datetime.now())
                 except TooManyRequests:
-                    logging.warning(
+                    logger.warning(
                         f"Too Many Requests: Exceeded rate limit for {user_id=}. Waiting 15 minutes before retry.")
                     time.sleep(900)  # Sleep for 15 minutes
                     try:
@@ -162,28 +163,27 @@ def process_user_chunks(user_id, chunked_target_user_ids):
                         response = client.mute(target_user_id=target_user_id)
                         success_mute_status = str(response['data']['muting'])
                         database.store_mute_result(user_id, target_user_id, success_mute_status, datetime.now())
-                        logging.info(f"Successfully muted {target_user_id=} for {user_id=} after retry")
+                        logger.info(f"Successfully muted {target_user_id=} for {user_id=} after retry")
                     except TweepyException as retry_e:
-                        logging.error(f"Failed to mute {target_user_id=} for {user_id=} after retry: {retry_e}")
+                        logger.error(f"Failed to mute {target_user_id=} for {user_id=} after retry: {retry_e}")
                         database.store_mute_result(user_id, target_user_id, f"Failed - Rate Limit (Retry Failed)",
                                                    datetime.now())
                 except TweepyException as e:
-                    logging.error(f"Twitter API error for {user_id=} muting {target_user_id=}: {e}")
+                    logger.error(f"Twitter API error for {user_id=} muting {target_user_id=}: {e}")
                     database.store_mute_result(user_id, target_user_id, f"Failed - {str(e)}", datetime.now())
                 except Exception as e:
-                    logging.error(f"Unexpected error for {user_id=} muting {target_user_id=}: {e}")
+                    logger.error(f"Unexpected error for {user_id=} muting {target_user_id=}: {e}")
                     database.store_mute_result(user_id, target_user_id, f"Failed - Unexpected Error", datetime.now())
 
         # Update state as 'Done' after processing all chunks
         database.store_mute_state(user_id=user_id, state="Done")
-        logging.info(f"Muting process completed for {user_id=}")
+        logger.info(f"Muting process completed for {user_id=}")
 
     except Exception as e:
-        logging.error(f"Unexpected error in process_user_chunks for {user_id=}: {e}")
+        logger.error(f"Unexpected error in process_user_chunks for {user_id=}: {e}")
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
         mute_users = get_mute_users()
@@ -194,17 +194,17 @@ def main():
         for chunk_index in range(max_chunks):
             for user_id, chunks in all_users_chunked_target_ids.items():
                 if chunk_index < len(chunks):
-                    logging.info(f"Processing chunk {chunk_index+1} for {user_id=}")
+                    logger.info(f"Processing chunk {chunk_index+1} for {user_id=}")
                     try:
                         process_user_chunks(user_id, [chunks[chunk_index]])
                     except Exception as e:
-                        logging.error(f"Error processing chunk for {user_id=}: {e}")
-            logging.info("Waiting 15 minutes to respect rate limits...")
+                        logger.error(f"Error processing chunk for {user_id=}: {e}")
+            logger.info("Waiting 15 minutes to respect rate limits...")
             time.sleep(15 * 60)
 
         for user_id in mute_users:
             database.store_mute_state(user_id=user_id, state="Muting_Done")
-            logging.info(f"Muting job for {user_id=} is done!")
+            logger.info(f"Muting job for {user_id=} is done!")
 
 
 if __name__ == "__main__":

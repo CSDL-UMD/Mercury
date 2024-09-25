@@ -7,7 +7,7 @@
       "datefmt": "%Y-%m-%dT%H:%M:%S%z"
     },
     "json": {
-      "()": "mercurylogger_utils.MyJSONFormatter",
+      "()": "mercuryproj.mercurylogger_utils.MyJSONFormatter",
       "fmt_keys": {
         "level": "levelname",
         "message": "message",
@@ -22,52 +22,52 @@
   },
   "filters": {
     "moreThanInfoFilter": {
-      "()": "mercurylogger_utils.MoreThanInfoFilter"
+      "()": "mercuryproj.mercurylogger_utils.MoreThanInfoFilter"
     },
     "auth_qualtrics_filter": {
-      "()": "mercurylogger_utils.AuthQualtricsFilter"
+      "()": "mercuryproj.mercurylogger_utils.AuthQualtricsFilter"
     },
     "compliance_filter": {
-      "()": "mercurylogger_utils.ComplianceFilter"
+      "()": "mercuryproj.mercurylogger_utils.ComplianceFilter"
     },
     "compliance_voluntary_filter": {
-      "()": "mercurylogger_utils.ComplianceVoluntaryFilter"
+      "()": "mercuryproj.mercurylogger_utils.ComplianceVoluntaryFilter"
     },
     "database_filter": {
-      "()": "mercurylogger_utils.DatabaseFilter"
+      "()": "mercuryproj.mercurylogger_utils.DatabaseFilter"
     },
     "eligibility_filter": {
-      "()": "mercurylogger_utils.EligibilityFilter"
+      "()": "mercuryproj.mercurylogger_utils.EligibilityFilter"
     },
     "muting_filter": {
-      "()": "mercurylogger_utils.MutingFilter"
+      "()": "mercuryproj.mercurylogger_utils.MutingFilter"
     },
     "unmuting_filter": {
-      "()": "mercurylogger_utils.UnmutingFilter"
+      "()": "mercuryproj.mercurylogger_utils.UnmutingFilter"
     },
     "pre_engagements_filter": {
-      "()": "mercurylogger_utils.PreEngagementsFilter"
+      "()": "mercuryproj.mercurylogger_utils.PreEngagementsFilter"
     },
     "post_engagements_filter": {
-      "()": "mercurylogger_utils.PostEngagementsFilter"
+      "()": "mercuryproj.mercurylogger_utils.PostEngagementsFilter"
     },
     "post_endline_engagements_filter": {
-      "()": "mercurylogger_utils.PostEndlineEngagementsFilter"
+      "()": "mercuryproj.mercurylogger_utils.PostEndlineEngagementsFilter"
     },
     "pre_engagements_parse_filter": {
-      "()": "mercurylogger_utils.PreEngagementsParseFilter"
+      "()": "mercuryproj.mercurylogger_utils.PreEngagementsParseFilter"
     },
     "post_engagements_parse_filter": {
-      "()": "mercurylogger_utils.PostEngagementsParseFilter"
+      "()": "mercuryproj.mercurylogger_utils.PostEngagementsParseFilter"
     },
     "post_endline_engagements_parse_filter": {
-      "()": "mercurylogger_utils.PostEndlineEngagementsParseFilter"
+      "()": "mercuryproj.mercurylogger_utils.PostEndlineEngagementsParseFilter"
     },
     "post_endline_at_once_filter": {
-      "()": "mercurylogger_utils.PostEndlineAtOnceFilter"
+      "()": "mercuryproj.mercurylogger_utils.PostEndlineAtOnceFilter"
     },
     "post_endline_at_once_parse_filter": {
-      "()": "mercurylogger_utils.PostEndlineAtOnceParseFilter"
+      "()": "mercuryproj.mercurylogger_utils.PostEndlineAtOnceParseFilter"
     }
   },
   "handlers": {
@@ -76,7 +76,7 @@
       "level": "DEBUG",
       "formatter": "json",
       "filename": "logs/default_log.jsonl",
-      "maxBytes": 10000,
+      "maxBytes": 60000,
       "backupCount": 3
     },
     "stderr": {

@@ -19,12 +19,14 @@ from . import create_app
 from . import database
 from .configuration import configuration
 
+logger = logging.getLogger("mercury.post_endline_at_once_parse")
+
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
 
 data_dir = user_data_dir(appname=__package__)
 if not os.path.exists(data_dir):
-    logging.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
+    logger.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
     os.mkdir(data_dir)
 
 bearer_token = cred['bearer_token'].replace('%%', '%')
@@ -57,7 +59,7 @@ def load_json_files(directory, user_id, file_pattern):
         with open(file_path, 'r') as file:
             return json.load(file)
     else:
-        logging.warning(f"File {file_path} does not exist for {user_id=}")
+        logger.warning(f"File {file_path} does not exist for {user_id=}")
         return []
 
 
@@ -66,7 +68,7 @@ def post_endline_engagement_parse():
     user_id_list = database.get_w3_users_at_once()
 
     for user_id in user_id_list:
-        logging.info(f"Collecting post-treatment tweets for {user_id=}")
+        logger.info(f"Collecting post-treatment tweets for {user_id=}")
 
         # Load collected data
         tweets_dir = os.path.join(data_dir, "engagements", "endline-engagements")
@@ -78,14 +80,14 @@ def post_endline_engagement_parse():
         home = load_json_files(hometimeline_dir, user_id, "endline-hometimeline-{user_id}.json")
 
         if not tweets and not arr and not home:
-            logging.warning(f"No data found for {user_id=}. Skipping this user.")
+            logger.warning(f"No data found for {user_id=}. Skipping this user.")
             continue
 
         # Now parse the collected tweets, likes, and exposures
         matches = []
 
         # Parse engagements
-        logging.info(f"Parsing post-endline engagement data for {user_id=}.")
+        logger.info(f"Parsing post-endline engagement data for {user_id=}.")
         for tweet in tweets:
             if "referenced_tweets" not in tweet:
                 if "mentions" in tweet.get("entities", {}):
@@ -104,9 +106,9 @@ def post_endline_engagement_parse():
                                     {"user_id": user_id, "target_user_id": matched_target_user_id,
                                      "type": "direct", "created_at": tweet["created_at"]})
                             except ValueError:
-                                logging.error(f"twitter_handle not found in target_usernames: {twitter_handle}")
+                                logger.error(f"twitter_handle not found in target_usernames: {twitter_handle}")
                             except IndexError:
-                                logging.error(f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
+                                logger.error(f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
             else:
                 for ref_tweet in tweet["referenced_tweets"]:
                     if ref_tweet["type"] == "replied_to":
@@ -140,12 +142,12 @@ def post_endline_engagement_parse():
                                             {"user_id": user_id, "target_user_id": matched_target_user_id,
                                              "type": "quoted", "created_at": tweet["created_at"]})
                                     except ValueError:
-                                        logging.error(f"twitter_handle not found in target_usernames: {twitter_handle}")
+                                        logger.error(f"twitter_handle not found in target_usernames: {twitter_handle}")
                                     except IndexError:
-                                        logging.error(f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
+                                        logger.error(f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
 
         # Parse likes
-        logging.info(f"Parsing post-endline likes data for {user_id=}.")
+        logger.info(f"Parsing post-endline likes data for {user_id=}.")
         processed_tweets = set()
 
         for like in arr:
@@ -186,13 +188,13 @@ def post_endline_engagement_parse():
                                                 "type": "indirect_like", "created_at": like["created_at"]})
                                 break
                             except ValueError:
-                                logging.error(f"Handle not found in target_usernames: {twitter_handle}")
+                                logger.error(f"Handle not found in target_usernames: {twitter_handle}")
                             except IndexError:
-                                logging.error(
+                                logger.error(
                                     f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
 
         # Parse exposures
-        logging.info(f"Parsing post-endline exposure data for {user_id=}.")
+        logger.info(f"Parsing post-endline exposure data for {user_id=}.")
 
         for exposure in home:
             author_id = exposure['author_id']
@@ -218,11 +220,11 @@ def post_endline_engagement_parse():
                                                         "type": "exposure_retweeted", "created_at": exposure['created_at']})
                                     except ValueError:
                                         # Handle the case where the twitter_handle is not found in the target_usernames list
-                                        logging.error(
+                                        logger.error(
                                             f"twitter_handle not found in target_usernames: {twitter_handle}")
                                     except IndexError:
                                         # Handle the case where the index is out of bounds for the target_user_ids list
-                                        logging.error(
+                                        logger.error(
                                             f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
                         elif ref_tweet['type'] == 'quoted' and 'mentions' in exposure['entities']:
                             for mention in exposure['entities']['mentions']:
@@ -248,28 +250,27 @@ def post_endline_engagement_parse():
                                                  "type": "exposure_quoted", "created_at": exposure['created_at']})
                                         except ValueError:
                                             # Handle the case where the twitter_handle is not found in the target_usernames list
-                                            logging.error(
+                                            logger.error(
                                                 f"twitter_handle not found in target_usernames: {twitter_handle}")
                                         except IndexError:
                                             # Handle the case where the index is out of bounds for the target_user_ids list
-                                            logging.error(
+                                            logger.error(
                                                 f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
 
         # Save parsed data
         parsed_directory = os.path.join(data_dir, "matched_files")
         if not os.path.exists(parsed_directory):
-            logging.warning(f"Configuration dir {parsed_directory} does not exist. Creating it now.")
+            logger.warning(f"Configuration dir {parsed_directory} does not exist. Creating it now.")
             os.makedirs(parsed_directory, exist_ok=True)
         parsed_file_path = os.path.join(parsed_directory, f"post-endline-totalengagements_{user_id}.json")
         with open(parsed_file_path, 'w') as parsed_file:
             json.dump(matches, parsed_file, indent=4)
-            logging.info(f"Saved parsed post-endline engagements and likes for {user_id=}")
+            logger.info(f"Saved parsed post-endline engagements and likes for {user_id=}")
 
-    logging.info(f"Finished parsing post-engagements!")
+    logger.info(f"Finished parsing post-engagements!")
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
         post_endline_engagement_parse()

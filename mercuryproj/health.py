@@ -3,6 +3,7 @@ from . import database
 
 bp = Blueprint("health", __name__, url_prefix="/health")
 
+
 @bp.route('/check')
 def check():
     db = database.getdb()

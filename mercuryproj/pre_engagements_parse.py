@@ -20,12 +20,14 @@ from . import create_app
 from . import database
 from .configuration import configuration
 
+logger = logging.getLogger("mercury.pre_engagements_parse")
+
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
 
 data_dir = user_data_dir(appname=__package__)
 if not os.path.exists(data_dir):
-    logging.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
+    logger.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
     os.mkdir(data_dir)
 
 bearer_token = cred['bearer_token'].replace('%%', '%')
@@ -58,7 +60,7 @@ def load_json_files(directory, user_id, file_pattern):
         with open(file_path, 'r') as file:
             return json.load(file)
     else:
-        logging.warning(f"File {file_path} does not exist for {user_id=}")
+        logger.warning(f"File {file_path} does not exist for {user_id=}")
         return []
 
 
@@ -67,7 +69,7 @@ def post_treatment_engagement_parse():
     user_id_list = database.get_w1_users()
 
     for user_id in user_id_list:
-        logging.info(f"Parsing pre-treatment engagement data for {user_id=}.")
+        logger.info(f"Parsing pre-treatment engagement data for {user_id=}.")
 
         # Load collected data
         tweets_dir = os.path.join(data_dir, "engagements", "pre-engagements")
@@ -98,9 +100,9 @@ def post_treatment_engagement_parse():
                                     {"user_id": user_id, "target_user_id": matched_target_user_id,
                                      "type": "direct", "created_at": tweet["created_at"]})
                             except ValueError:
-                                logging.error(f"twitter_handle not found in target_usernames: {twitter_handle}")
+                                logger.error(f"twitter_handle not found in target_usernames: {twitter_handle}")
                             except IndexError:
-                                logging.error(
+                                logger.error(
                                     f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
             else:
                 for ref_tweet in tweet["referenced_tweets"]:
@@ -135,13 +137,13 @@ def post_treatment_engagement_parse():
                                             {"user_id": user_id, "target_user_id": matched_target_user_id,
                                              "type": "quoted", "created_at": tweet["created_at"]})
                                     except ValueError:
-                                        logging.error(f"twitter_handle not found in target_usernames: {twitter_handle}")
+                                        logger.error(f"twitter_handle not found in target_usernames: {twitter_handle}")
                                     except IndexError:
-                                        logging.error(
+                                        logger.error(
                                             f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
 
         # Parse likes
-        logging.info(f"Parsing pre-treatment likes data for {user_id=}.")
+        logger.info(f"Parsing pre-treatment likes data for {user_id=}.")
         processed_tweets = set()
 
         for like in arr:
@@ -182,40 +184,39 @@ def post_treatment_engagement_parse():
                                                 "type": "indirect_like", "created_at": like["created_at"]})
                                 break
                             except ValueError:
-                                logging.error(f"Handle not found in target_usernames: {twitter_handle}")
+                                logger.error(f"Handle not found in target_usernames: {twitter_handle}")
                             except IndexError:
-                                logging.error(
+                                logger.error(
                                     f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
 
         # Save parsed data
         parsed_directory = os.path.join(data_dir, "matched_files")
         if not os.path.exists(parsed_directory):
-            logging.warning(f"Configuration dir {parsed_directory} does not exist. Creating it now.")
+            logger.warning(f"Configuration dir {parsed_directory} does not exist. Creating it now.")
             os.makedirs(parsed_directory, exist_ok=True)
         parsed_file_path = os.path.join(parsed_directory, f"pre-treatment_totalengagements_{user_id}.json")
         with open(parsed_file_path, 'w') as parsed_file:
             json.dump(matches, parsed_file, indent=4)
-            logging.info(f"Saved parsed pre-treatment engagements and likes for {user_id=}")
+            logger.info(f"Saved parsed pre-treatment engagements and likes for {user_id=}")
 
         # Update eligibility status in the database
         try:
             engagement_count = len(matches)
             passed = engagement_count > 0
             database.store_eligibility(user_id, "pre-treatment_engagement", passed, engagement_count)
-            logging.info(
+            logger.info(
                 f"Eligibility updated successfully for {user_id=}, passed={passed}, count={engagement_count}")
             # Update w2_invitation table in the database
             if engagement_count > 0:
                 database.update_w2_invitation(user_id)
 
         except Exception as e:
-            logging.error(f"Failed to update eligibility in DB for {user_id=}: {e}")
+            logger.error(f"Failed to update eligibility in DB for {user_id=}: {e}")
 
-    logging.info(f"Finished parsing pre-engagements and updating eligibility in DB!")
+    logger.info(f"Finished parsing pre-engagements and updating eligibility in DB!")
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
         post_treatment_engagement_parse()

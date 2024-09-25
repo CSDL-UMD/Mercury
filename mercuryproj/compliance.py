@@ -30,6 +30,7 @@ from . import create_app
 from . import database
 from .configuration import configuration
 
+logger = logging.getLogger("mercury.compliance")
 
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
@@ -37,7 +38,7 @@ cred = configuration['twitterapp']
 
 data_dir = user_data_dir(appname=__package__)
 if not os.path.exists(data_dir):
-    logging.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
+    logger.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
     os.mkdir(data_dir)
 
 
@@ -63,14 +64,14 @@ def check_mute_compliance():
                 if user_info["state"] in ["Muting_Done", "Unmuting_Done"]]
 
     for user_id in user_ids:
-        logging.info(f'Checking muting relationship for {user_id=}')
+        logger.info(f'Checking muting relationship for {user_id=}')
 
         # Fetch user's Twitter API access tokens
         response = database.get_access_token(user_id)
         access_token_response = response.get_json()
 
         if 'error' in access_token_response:
-            logging.error(f"Failed to get access token for {user_id=}: {access_token_response['error']}")
+            logger.error(f"Failed to get access token for {user_id=}: {access_token_response['error']}")
             continue
 
         access_token = access_token_response['access_token']
@@ -92,16 +93,16 @@ def check_mute_compliance():
                 data = json.load(outfile)
             target_user_list = [entry["target_user_id"] for entry in data]
         except FileNotFoundError:
-            logging.error(f"Muted accounts file not found for {user_id=}")
+            logger.error(f"Muted accounts file not found for {user_id=}")
             continue
         except json.JSONDecodeError:
-            logging.error(f"Invalid JSON in muted accounts file for {user_id=}")
+            logger.error(f"Invalid JSON in muted accounts file for {user_id=}")
             continue
         except OSError as e:
-            logging.error(f"I/O error occurred while reading muted accounts for {user_id=}: {str(e)}")
+            logger.error(f"I/O error occurred while reading muted accounts for {user_id=}: {str(e)}")
             continue
         except Exception as e:
-            logging.error(f"Unexpected error loading muted accounts for {user_id=}: {str(e)}")
+            logger.error(f"Unexpected error loading muted accounts for {user_id=}: {str(e)}")
             continue
 
         # Considering endpoint limit: maximum 100, we chunk target_user_list
@@ -125,26 +126,26 @@ def check_mute_compliance():
                     users = response.json()
                     all_data.extend(users['data'])
                 else:
-                    logging.error(f"{user_id=} error with status code {response.status_code} for chunk {index}")
+                    logger.error(f"{user_id=} error with status code {response.status_code} for chunk {index}")
                     if response.status_code == 429:  # Too Many Requests
-                        logging.warning(f"Rate limit exceeded for {user_id=}. Waiting 15 minutes before retry.")
+                        logger.warning(f"Rate limit exceeded for {user_id=}. Waiting 15 minutes before retry.")
                         time.sleep(900)  # Wait for 15 minutes
                         response = requests.get(url, auth=auth, params=params)
                         if response.status_code == 200:
                             users = response.json()
                             all_data.extend(users['data'])
-                            logging.info(f"Successfully retrieved data for {user_id=} after retry")
+                            logger.info(f"Successfully retrieved data for {user_id=} after retry")
                         else:
-                            logging.error(f"Retry failed for {user_id=} with status code {response.status_code}")
+                            logger.error(f"Retry failed for {user_id=} with status code {response.status_code}")
                             continue
             except requests.exceptions.RequestException as e:
-                logging.error(f"Request failed for chunk {index} of {user_id=}: {e}")
+                logger.error(f"Request failed for chunk {index} of {user_id=}: {e}")
                 continue
 
         # Save compliance data
         directory = os.path.join(data_dir, "muting_job", "compliance")
         if not os.path.exists(directory):
-            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+            logger.warning(f"Configuration dir {directory} does not exist. Creating it now.")
             os.makedirs(directory, exist_ok=True)
         time_day = str(datetime.now().date())
 
@@ -152,20 +153,20 @@ def check_mute_compliance():
             with open(os.path.join(directory, f"{user_id}_{time_day}.json"), 'w', encoding='utf-8') as file:
                 json.dump(all_data, file, ensure_ascii=False, indent=4)
         except OSError as e:
-            logging.error(f"I/O error occurred while saving compliance data for {user_id=}: {str(e)}")
+            logger.error(f"I/O error occurred while saving compliance data for {user_id=}: {str(e)}")
         except Exception as e:
-            logging.error(f"Unexpected error while saving compliance data for {user_id=}: {str(e)}")
+            logger.error(f"Unexpected error while saving compliance data for {user_id=}: {str(e)}")
 
         time.sleep(10)
 
-        logging.info('Now, mute compliance processing initiated')
+        logger.info('Now, mute compliance processing initiated')
 
         # Get user's state (Muting_Done or Unmuting_Done)
         user_state = next((user_info["state"] for user_info in all_users_state if user_info["user_id"] == user_id),
                           None)
 
         if user_state is None:
-            logging.error(f"Could not find state for {user_id=}")
+            logger.error(f"Could not find state for {user_id=}")
             continue
 
         # Process compliance data and record violations
@@ -186,16 +187,15 @@ def check_mute_compliance():
                     target_username=user['username'],
                     case_tag=user_state
                 )
-                logging.info(
+                logger.info(
                     f"Recorded compliance violation for {user_id=}, target: {user['username']}, case: {user_state}")
 
-        logging.info(f'Compliance check and recording completed for {user_id=}')
+        logger.info(f'Compliance check and recording completed for {user_id=}')
 
-    logging.info(f'End mute compliance')
+    logger.info(f'End mute compliance')
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
         check_mute_compliance()

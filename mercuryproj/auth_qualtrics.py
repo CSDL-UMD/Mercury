@@ -13,6 +13,7 @@ from flask import abort, request, Blueprint
 from platformdirs import user_data_dir
 from . import database
 from .configuration import configuration
+logger = logging.getLogger("mercury.authqualtrics")
 
 bp = Blueprint("auth_qualtrics", __name__, url_prefix="/auth_qualtrics")
 
@@ -27,7 +28,7 @@ survey_url = str(webInformation['survey_url'])
 
 data_dir = user_data_dir(appname=__package__)
 if not os.path.exists(data_dir):
-    logging.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
+    logger.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
     os.makedirs(data_dir)
 
 
@@ -39,12 +40,12 @@ def process_user_id(user_id):
     # Define the directory where user data files are saved
     directory = f"{data_dir}/headlines_user"
     if not os.path.exists(directory):
-        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        logger.warning(f"Configuration dir {directory} does not exist. Creating it now.")
         os.makedirs(directory, exist_ok=True)
     filepath = os.path.join(directory, f"data_{user_id}.json")
     # Check if user data already exists
     if os.path.exists(filepath):
-        logging.info(f"User ID {user_id} data file already exists. Skipping processing.")
+        logger.info(f"User ID {user_id} data file already exists. Skipping processing.")
         return None
     # Load data from headline.json
     with open(str(files("mercuryproj.data").joinpath("headline.json")), mode='r') as f:
@@ -78,9 +79,9 @@ def auth_start():
     try:
         request_token = OAuth1Session(client_key=cred['key'], client_secret=cred['key_secret'])
         content = request_token.post(request_token_url, data={"oauth_callback": app_callback_url_qual})
-        logging.info('Twitter access successful')
+        logger.info('Twitter access successful')
     except Exception as error:
-        logging.error('Twitter access failed with error : ' + str(error))
+        logger.error('Twitter access failed with error : ' + str(error))
 
     data_tokens = content.text.split("&")
 
@@ -100,13 +101,13 @@ def qualcallback():
     """
     Callback received from Twitter and stores long-term tokens in secure DB.
     """
-    logging.info("Callback Called!!!")
+    logger.info("Callback Called!!!")
     oauth_token = request.args.get('oauth_token')
     oauth_verifier = request.args.get('oauth_verifier')
     oauth_denied = request.args.get('denied')
 
     if oauth_denied:
-        logging.info('oauth denied!')
+        logger.info('oauth denied!')
         return "<script>window.onload = window.close();</script>"
 
     # Retrieve oauth_token_secret from DB using oauth_token as the key
@@ -147,7 +148,7 @@ def qualcallback():
 
 @bp.route('/auth_screenname', methods=['GET', 'POST'])
 def auth_screenname():
-    logging.info("Screen name is called!")
+    logger.info("Screen name is called!")
     oauth_token_qualtrics = request.args.get('oauth_token')
     # Find oauth_token from db
     try:
@@ -159,7 +160,7 @@ def auth_screenname():
             access_token_return = user_details['access_token']
             access_token_secret_return = user_details['access_token_secret']
 
-            logging.info(f"Hello, {screen_name_return=}")
+            logger.info(f"Hello, {screen_name_return=}")
             return f"{screen_name_return}$$$" + str(
                 userid_return) + "$$$" + access_token_return + "$$$" + access_token_secret_return
         else:
@@ -167,7 +168,7 @@ def auth_screenname():
             return "No data found for token", 404
     except Exception as e:
         # Log the exception and return an error message
-        logging.error(f"Error retrieving user details: {e}")
+        logger.error(f"Error retrieving user details: {e}")
         return "An error occurred", 500
 
 
@@ -192,7 +193,7 @@ def randomize_headline():
     # Set the directory where the files will be saved
     directory = f"{data_dir}/headlines_user"
     if not os.path.exists(directory):
-        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        logger.warning(f"Configuration dir {directory} does not exist. Creating it now.")
         os.makedirs(directory, exist_ok=True)
     # Save the result to a JSON file per user:
     with open(os.path.join(directory, f"data_{user_id}.json"), 'w') as f:
@@ -207,11 +208,11 @@ def get_sampled_headlines():
     """
     user_id = request.args.get("user_id").strip()
     wave = request.args.get("wave").strip()
-    logging.info(f"Get sampled headlines for {user_id=} at {wave=}")
+    logger.info(f"Get sampled headlines for {user_id=} at {wave=}")
     # Load the data from the JSON file
     directory = f"{data_dir}/headlines_user"
     if not os.path.exists(directory):
-        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        logger.warning(f"Configuration dir {directory} does not exist. Creating it now.")
         os.makedirs(directory, exist_ok=True)
     file_path = os.path.join(directory, f"data_{user_id}.json")
     with open(file_path.format(user_id), 'r') as f:
@@ -233,8 +234,8 @@ def get_sampled_headlines():
         files_wave = [item['file'] for item in extracted_data if item['wave'] == 3]
         resp_return = f"{files_wave[0]}$$${files_wave[1]}$$${files_wave[2]}$$${files_wave[3]}$$${files_wave[4]}$$${files_wave[5]}$$${files_wave[6]}$$${files_wave[7]}$$${files_wave[8]}$$${files_wave[9]}$$${files_wave[10]}$$${files_wave[11]}"
     else:
-        logging.info("Invalid wave value")
-    logging.info(f"{user_id=}'s headlines for {wave=}: {resp_return}")
+        logger.info("Invalid wave value")
+    logger.info(f"{user_id=}'s headlines for {wave=}: {resp_return}")
     return resp_return
 
 
@@ -344,7 +345,7 @@ def random70_mute():
     # Set the directory where the files will be saved
     directory = f"{data_dir}/muting_job/muted_accounts"
     if not os.path.exists(directory):
-        logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+        logger.warning(f"Configuration dir {directory} does not exist. Creating it now.")
         os.makedirs(directory, exist_ok=True)
     # Save the result to a JSON file per user:
     with open(os.path.join(directory, f"muted_accounts_for_{user_id}.json"), 'w') as f:
@@ -428,9 +429,9 @@ def follow_politifact():
         try:
             response = client.follow_user(target_user_id=target_follow_id, user_auth=True)
             success = response["data"]["following"]
-            logging.info(f"Following result: {success=} for {user_id=}")
+            logger.info(f"Following result: {success=} for {user_id=}")
         except Exception as e:
-            logging.error(f"Error: {e}")
+            logger.error(f"Error: {e}")
             time.sleep(1000)
         else:
             # If no exception was raised in the try block, break the loop
@@ -467,7 +468,7 @@ def w2_exposure():
         user_id = request.args.get("user_id").strip()
     else:
         abort(500, "No user_id specified. Aborting.")
-    logging.info(f"Getting w2 exposure of {user_id=}")
+    logger.info(f"Getting w2 exposure of {user_id=}")
 
     # Top 20 with most `followed_by` in the pilot
     top_20 = ["RealAlexJones", "infowars", "TuckerCarlson", "FoxNews",
@@ -504,13 +505,13 @@ def w2_exposure():
             muted_data = json.load(file)
             muted_handles = set(account['twitter_handle'] for account in muted_data)
     except FileNotFoundError:
-        logging.error(f"Muted accounts file not found for {user_id=}. Using fallback method.")
+        logger.error(f"Muted accounts file not found for {user_id=}. Using fallback method.")
         muted_handles = set(top_20)
     except json.JSONDecodeError:
-        logging.error(f"JSON decoding error for muted accounts file of {user_id=}. Using fallback method.")
+        logger.error(f"JSON decoding error for muted accounts file of {user_id=}. Using fallback method.")
         muted_handles = set(top_20)
     except Exception as e:
-        logging.error(f"Unexpected error reading muted accounts file for {user_id=}: {str(e)}. Using fallback method.")
+        logger.error(f"Unexpected error reading muted accounts file for {user_id=}: {str(e)}. Using fallback method.")
         muted_handles = set(top_20)
 
     # Load pre-treatment engagement data
@@ -519,7 +520,7 @@ def w2_exposure():
         with open(engagement_file, 'r') as file:
             engagement_data = json.load(file)
     except Exception as e:
-        logging.error(f"Error reading engagement file for {user_id=}: {str(e)}")
+        logger.error(f"Error reading engagement file for {user_id=}: {str(e)}")
         engagement_data = []
 
     # Get unique engaged target_user_ids
@@ -597,7 +598,7 @@ def w3_exposure():
     else:
         abort(500, "No user_id specified. Aborting.")
 
-    logging.info(f"Getting Wave 3 exposure for {user_id=}")
+    logger.info(f"Getting Wave 3 exposure for {user_id=}")
 
     try:
         # Load the exposure data from the database
@@ -619,7 +620,7 @@ def w3_exposure():
             return result
 
         else:
-            logging.warning(f"No exposure data found for {user_id=}. Generating new data using w2_exposure logic.")
+            logger.warning(f"No exposure data found for {user_id=}. Generating new data using w2_exposure logic.")
             # w2_exposure logic starts here
             top_20 = ["RealAlexJones", "infowars", "TuckerCarlson", "FoxNews",
                       "DonaldJTrumpJr", "seanhannity", "DineshDSouza",
@@ -650,7 +651,7 @@ def w3_exposure():
                     muted_data = json.load(file)
                     muted_handles = set(account['twitter_handle'] for account in muted_data)
             except Exception as e:
-                logging.error(f"Error reading muted accounts file for {user_id=}: {str(e)}. Using fallback method.")
+                logger.error(f"Error reading muted accounts file for {user_id=}: {str(e)}. Using fallback method.")
                 muted_handles = set(top_20)
 
             # Load pre-treatment engagement data
@@ -659,7 +660,7 @@ def w3_exposure():
                 with open(engagement_file, 'r') as file:
                     engagement_data = json.load(file)
             except Exception as e:
-                logging.error(f"Error reading engagement file for {user_id=}: {str(e)}")
+                logger.error(f"Error reading engagement file for {user_id=}: {str(e)}")
                 engagement_data = []
 
             engaged_target_ids = set(engagement['target_user_id'] for engagement in engagement_data)
@@ -697,10 +698,10 @@ def w3_exposure():
             return "$$$".join(all_handles_str)
 
     except ValueError as ve:
-        logging.error(f"Error retrieving Wave 3 exposure data for {user_id=}: {str(ve)}")
+        logger.error(f"Error retrieving Wave 3 exposure data for {user_id=}: {str(ve)}")
         abort(404, f"Exposure data not found: {str(ve)}")
     except Exception as e:
-        logging.error(f"Unexpected error retrieving Wave 3 exposure data for {user_id=}: {str(e)}")
+        logger.error(f"Unexpected error retrieving Wave 3 exposure data for {user_id=}: {str(e)}")
         abort(500, f"Error retrieving exposure data: {str(e)}")
 
 

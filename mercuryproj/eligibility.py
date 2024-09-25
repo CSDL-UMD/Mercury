@@ -40,12 +40,14 @@ from . import create_app
 from . import database
 from .configuration import configuration
 
+logger = logging.getLogger("mercury.eligibility")
+
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
 
 data_dir = user_data_dir(appname=__package__)
 if not os.path.exists(data_dir):
-    logging.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
+    logger.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
     os.mkdir(data_dir)
 
 # Load inventory with target user ids
@@ -60,16 +62,16 @@ def chunker(seq, size):
 
 
 def save_user_info():
-    logging.info(f'Start saving user info')
+    logger.info(f'Start saving user info')
     # Get w1 user_ids from yesterday
     user_ids = database.get_w1_users()
     for user_id in user_ids:
-        logging.info(f'Saving user info for {user_id=}.')
+        logger.info(f'Saving user info for {user_id=}.')
         response = database.get_access_token(user_id)
         access_token_response = response.get_json()
 
         if 'error' in access_token_response:
-            logging.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
+            logger.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
             continue
 
         access_token = access_token_response['access_token']
@@ -87,18 +89,18 @@ def save_user_info():
             user_fields = 'created_at,public_metrics'
             response = client.get_me(user_fields=user_fields)
         except Unauthorized:
-            logging.error(f"Unauthorized: Authentication failed for {user_id=}")
+            logger.error(f"Unauthorized: Authentication failed for {user_id=}")
         except Forbidden:
-            logging.error(f"Forbidden: The request is understood, but it has been refused for {user_id=}")
+            logger.error(f"Forbidden: The request is understood, but it has been refused for {user_id=}")
         except TweepyException as e:
-            logging.error(f"Twitter API error for {user_id=} getting self info: {e}")
+            logger.error(f"Twitter API error for {user_id=} getting self info: {e}")
         except Exception as e:
-            logging.error(f"Unexpected error for {user_id=} getting self info: {e}")
+            logger.error(f"Unexpected error for {user_id=} getting self info: {e}")
 
         if 'data' in response:
             data = response['data']
         else:
-            logging.error(f"No 'data' key for {user_id=} in getting self info.")
+            logger.error(f"No 'data' key for {user_id=} in getting self info.")
             continue
 
         created_at_str = data['created_at'].replace("Z", "UTC")
@@ -110,16 +112,16 @@ def save_user_info():
         public_metrics = data['public_metrics']
 
         if created_at_dt < four_months_ago:
-            logging.info(f"{user_id=}'s account created more than 4 months ago")
+            logger.info(f"{user_id=}'s account created more than 4 months ago")
             database.store_eligibility(user_id, "account_created", True, "na")
         else:
-            logging.info(f"{user_id=}'s account created less than 4 months ago")
+            logger.info(f"{user_id=}'s account created less than 4 months ago")
             database.store_eligibility(user_id, "account_created", False, "na")
 
         row = [user_id, created_at_str, public_metrics]
         directory = os.path.join(data_dir, "eligibility")
         if not os.path.exists(directory):
-            logging.warning(f"Configuration dir {directory} does not exist. Creating it now.")
+            logger.warning(f"Configuration dir {directory} does not exist. Creating it now.")
             os.mkdir(directory)
         file_path = os.path.join(directory, "user_info.csv")
         try:
@@ -127,20 +129,20 @@ def save_user_info():
                 writer_obj = writer(f)
                 writer_obj.writerow(row)
         except FileNotFoundError as e:
-            logging.error(f"File not found: {file_path} for {user_id=}: {e}")
+            logger.error(f"File not found: {file_path} for {user_id=}: {e}")
         except io.UnsupportedOperation as e:
-            logging.error(f"File mode error when writing user info to {file_path} for {user_id=}: {e}")
+            logger.error(f"File mode error when writing user info to {file_path} for {user_id=}: {e}")
         except OSError as e:
-            logging.error(f"IO error occurred when writing user info to {file_path} for {user_id=}: {e}")
+            logger.error(f"IO error occurred when writing user info to {file_path} for {user_id=}: {e}")
         except Exception as e:
-            logging.error(f"An unexpected error occurred when writing user info to {file_path} for {user_id=}: {e}")
+            logger.error(f"An unexpected error occurred when writing user info to {file_path} for {user_id=}: {e}")
         finally:
-            logging.info(f'Saving user info for {user_id=} done!')
-    logging.info(f'End saving user info')
+            logger.info(f'Saving user info for {user_id=} done!')
+    logger.info(f'End saving user info')
 
 
 def relationship_check():
-    logging.info(f'Start checking the relationships between users and inventory accounts')
+    logger.info(f'Start checking the relationships between users and inventory accounts')
     # get w1 users from yesterday
     user_ids = database.get_w1_users()
 
@@ -159,7 +161,7 @@ def relationship_check():
             access_token_response = response.get_json()
 
             if 'error' in access_token_response:
-                logging.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
+                logger.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
                 continue
 
             # Store the user's tokens
@@ -191,11 +193,11 @@ def relationship_check():
                         users = response.json()
                         all_data.extend(users['data'])
                     else:
-                        logging.error(f"{user_id=} error with status code {response.status_code} for target_chunk {index}")
+                        logger.error(f"{user_id=} error with status code {response.status_code} for target_chunk {index}")
                         continue
 
                 except requests.exceptions.RequestException as e:
-                    logging.error(f"Request failed for target_chunk {index}: {e}")
+                    logger.error(f"Request failed for target_chunk {index}: {e}")
                     continue
 
             directory = os.path.join(data_dir, "eligibility", "connection_status")
@@ -211,18 +213,17 @@ def relationship_check():
             else:
                 database.store_eligibility(user_id, "following_LQ", False, 0)
 
-            logging.info(f'Finished processing connection_status for {user_id=}')
+            logger.info(f'Finished processing connection_status for {user_id=}')
 
         # After each chunk, wait for 15 minutes to respect the rate limit, but not after the last chunk
         if chunk_index < total_chunks:
-            logging.info(f"Processed 300 users, sleeping for ~16 minutes to respect the rate limit.")
+            logger.info(f"Processed 300 users, sleeping for ~16 minutes to respect the rate limit.")
             time.sleep(16 * 60)  # Sleep for 16 minutes
 
-    logging.info(f'End checking relationships between users and inventory accounts')
+    logger.info(f'End checking relationships between users and inventory accounts')
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
         save_user_info()

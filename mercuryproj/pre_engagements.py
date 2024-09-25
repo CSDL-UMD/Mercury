@@ -31,12 +31,14 @@ from . import create_app
 from . import database
 from .configuration import configuration
 
+logger = logging.getLogger("mercury.pre_engagements")
+
 webInformation = configuration['webconfiguration']
 cred = configuration['twitterapp']
 
 data_dir = user_data_dir(appname=__package__)
 if not os.path.exists(data_dir):
-    logging.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
+    logger.warning(f"Configuration dir {data_dir} does not exist. Creating it now.")
     os.mkdir(data_dir)
 
 bearer_token = cred['bearer_token'].replace('%%', '%')
@@ -69,7 +71,7 @@ def extract_twitter_handle(url):
 
 def save_json_data_if_not_exists(file_path):
     if os.path.exists(file_path):
-        logging.info(f"File {file_path} already exists. Skipping this user.")
+        logger.info(f"File {file_path} already exists. Skipping this user.")
         return False
     else:
         return True
@@ -94,7 +96,7 @@ def pre_treatment_engagement():
 
     for chunk_index, user_chunk in enumerate(user_chunks, 1):
         for user_id in user_chunk:
-            logging.info(f"Collecting pre-treatment tweets for {user_id=}")
+            logger.info(f"Collecting pre-treatment tweets for {user_id=}")
 
             # For each user_id, we retrieve W1 session start date:
             session_start = database.get_w1_session_start(user_id)
@@ -108,10 +110,10 @@ def pre_treatment_engagement():
             directory_likes = os.path.join(data_dir, "engagements", "pre-likes")
 
             if not os.path.exists(directory_engagement):
-                logging.warning(f"Configuration dir {directory_engagement} does not exist. Creating it now.")
+                logger.warning(f"Configuration dir {directory_engagement} does not exist. Creating it now.")
                 os.makedirs(directory_engagement, exist_ok=True)
             if not os.path.exists(directory_likes):
-                logging.warning(f"Configuration dir {directory_likes} does not exist. Creating it now.")
+                logger.warning(f"Configuration dir {directory_likes} does not exist. Creating it now.")
                 os.makedirs(directory_likes, exist_ok=True)
 
             # File path
@@ -129,7 +131,7 @@ def pre_treatment_engagement():
                 if 'data' in response:
                     username = response['data']['username']
                 else:
-                    logging.error(f"No 'data' key for {user_id=}")
+                    logger.error(f"No 'data' key for {user_id=}")
                     continue
 
                 # Create headers
@@ -156,11 +158,11 @@ def pre_treatment_engagement():
                     tweets = response.json().get('data', [])
                     time.sleep(2)  # Wait for 2 seconds before making the next request
                 except requests.exceptions.HTTPError as e:
-                    logging.error(f"HTTP error while fetching pre-engagement data for {user_id=}: {e}")
+                    logger.error(f"HTTP error while fetching pre-engagement data for {user_id=}: {e}")
                     continue
                 except (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
                         requests.exceptions.RequestException) as e:
-                    logging.warning(f"Network error for {user_id=}: {e}. Retrying after 3 minutes.")
+                    logger.warning(f"Network error for {user_id=}: {e}. Retrying after 3 minutes.")
                     time.sleep(60 * 3)  # Sleep for 3 minutes before retrying
                     try:
                         response = requests.get(search_url, headers=headers, params=query_params)
@@ -168,14 +170,14 @@ def pre_treatment_engagement():
                         tweets = response.json().get('data', [])
                         time.sleep(2)  # Wait for 2 seconds before making the next request
                     except requests.exceptions.HTTPError as e:
-                        logging.error(f"HTTP error while fetching after retry for {user_id=}: {e}")
+                        logger.error(f"HTTP error while fetching after retry for {user_id=}: {e}")
                         continue
                     except (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
                             requests.exceptions.RequestException) as retry_e:
-                        logging.error(f"Failed to fetch data for {user_id=} after retry: {retry_e}")
+                        logger.error(f"Failed to fetch data for {user_id=} after retry: {retry_e}")
                         continue
                 except Exception as e:
-                    logging.error(f"Unexpected error while fetching pre-engagement data for {user_id=}: {e}")
+                    logger.error(f"Unexpected error while fetching pre-engagement data for {user_id=}: {e}")
                     continue  # Continue to process the next user (For error user_ids, collect data in the backend)
 
                 # Save tweets to file
@@ -183,24 +185,24 @@ def pre_treatment_engagement():
                     file_path = os.path.join(directory_engagement, f"pre-engagements_{user_id}.json")
                     with open(file_path, 'w') as outfile:
                         json.dump(tweets, outfile, indent=4)
-                        logging.info(f"Saved pre_treatment tweets for user: {user_id} to {file_path}")
+                        logger.info(f"Saved pre_treatment tweets for user: {user_id} to {file_path}")
                 except OSError as e:
-                    logging.error(f"File operation failed for {user_id=}: {e}")
+                    logger.error(f"File operation failed for {user_id=}: {e}")
                 except json.JSONDecodeError as e:
-                    logging.error(f"Failed to encode pre_treatment tweets to JSON for {user_id=}: {e}")
+                    logger.error(f"Failed to encode pre_treatment tweets to JSON for {user_id=}: {e}")
                 except Exception as e:
-                    logging.error(f"Unexpected error when saving pre_treatment tweets for {user_id=}: {e}")
+                    logger.error(f"Unexpected error when saving pre_treatment tweets for {user_id=}: {e}")
 
             time.sleep(3)
 
             # Now, moving onto likes:
-            logging.info(f'Start collecting likes of {user_id=}.')
+            logger.info(f'Start collecting likes of {user_id=}.')
 
             response = database.get_access_token(user_id)
             access_token_response = response.get_json()
 
             if 'error' in access_token_response:
-                logging.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
+                logger.error(f"Error retrieving access token for {user_id=}: {access_token_response['error']}")
                 continue
 
             # Store the user's tokens
@@ -239,7 +241,7 @@ def pre_treatment_engagement():
                 # Set up the directory for storing results
                 directory_likes = os.path.join(data_dir, "engagements", "pre-likes")
                 if not os.path.exists(directory_likes):
-                    logging.warning(f"Configuration dir {directory_likes} does not exist. Creating it now.")
+                    logger.warning(f"Configuration dir {directory_likes} does not exist. Creating it now.")
                     os.makedirs(directory_likes, exist_ok=True)
 
                 # Open the file for writing likes data
@@ -252,9 +254,9 @@ def pre_treatment_engagement():
                             else:
                                 break
                         json.dump(arr, outfile, indent=4)
-                        logging.info(f"Done collecting likes of {user_id=}")
+                        logger.info(f"Done collecting likes of {user_id=}")
                     except tweepy.TweepyException as e:
-                        logging.warning(f"Tweepy error for {user_id=}: {e}. Retrying after 3 minutes.")
+                        logger.warning(f"Tweepy error for {user_id=}: {e}. Retrying after 3 minutes.")
                         time.sleep(60 * 3)  # Sleep for 3 minutes before retrying
                         try:
                             arr = []
@@ -264,27 +266,26 @@ def pre_treatment_engagement():
                                 else:
                                     break
                             json.dump(arr, outfile, indent=4)
-                            logging.info(f"Successfully collected pre-likes for {user_id=} after retry")
+                            logger.info(f"Successfully collected pre-likes for {user_id=} after retry")
                         except tweepy.TweepyException as retry_e:
-                            logging.error(f"Failed to collect pre-likes for {user_id=} after retry: {retry_e}")
+                            logger.error(f"Failed to collect pre-likes for {user_id=} after retry: {retry_e}")
                             continue
                     except json.JSONDecodeError as e:
-                        logging.error(f"Failed to encode pre-likes to JSON for {user_id=}: {e}")
+                        logger.error(f"Failed to encode pre-likes to JSON for {user_id=}: {e}")
                         continue
                     except Exception as e:
-                        logging.error(f"An unexpected error occurred while collecting pre-likes for {user_id=}: {e}")
+                        logger.error(f"An unexpected error occurred while collecting pre-likes for {user_id=}: {e}")
                         continue
 
         # After each chunk, wait for 15 minutes to respect the rate limit, but not after the last chunk
         if chunk_index < total_chunks:
-            logging.info(f"Processed 300 users, sleeping for ~16 minutes to respect the rate limit.")
+            logger.info(f"Processed 300 users, sleeping for ~16 minutes to respect the rate limit.")
             time.sleep(16 * 60)
 
-    logging.info(f"Finished eligibility checks for all users!")
+    logger.info(f"Finished eligibility checks for all users!")
 
 
 def main():
-    logging.basicConfig(level=logging.INFO, force=True)
     app = create_app()
     with app.app_context():
         pre_treatment_engagement()

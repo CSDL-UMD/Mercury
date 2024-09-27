@@ -89,7 +89,7 @@ def post_endline_at_once():
     However, get_liked_tweets() doesn't allow start_time or end_time.
     Thus, we cannot set time frame, and just collect up to 70 likes per user (for the main study), which can go way back in time.
     """
-    # Get all users after March 25, 2025 (from March 26; after we turned off the Pro)
+    # Get all users after March 26, 2025 (from March 27; after we turned off the Pro)
     user_id_list = database.get_w3_users_at_once()
 
     # Chunk user_id_list into chunks of 300

@@ -1,13 +1,11 @@
-import pathlib
-import json
-from configparser import ConfigParser
-import os
-from platformdirs import user_config_dir, user_log_dir
-import logging
 from importlib.resources import files
+import json
+import logging
 import logging.config
 import logging.handlers
-from importlib.resources import files
+import os
+from configparser import ConfigParser
+from platformdirs import user_config_dir, user_log_dir
 
 config_fn = "config.ini"
 config_dir = user_config_dir(appname=__package__)
@@ -16,19 +14,10 @@ logging_configs = str(files("mercuryproj.logging_configs").joinpath("configs.jso
 
 
 def setup_logger():
-    print(logging_configs)
     with open(str(files("mercuryproj.logging_configs").joinpath("configs.json")), mode='r') as f:
         config = json.load(f)
-    #print(config)
-    print("Rivado", os.getcwd())
     logger = logging.getLogger("mercury")
-    # config_file = pathlib.Path("./logging_configs/configs.json")
-    # with open(config_file) as f_in:
-    #     config = json.load(f_in)
-    #
     logging.config.dictConfig(config)
-    #
-    # return logger
 
 
 if not os.path.exists(config_dir):

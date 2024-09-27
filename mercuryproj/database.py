@@ -599,8 +599,8 @@ def get_w3_users_at_once():
     """
     In post_endline_at_once_parse.py, post_endline_at_once_parse.py
     """
-    # Target date: March 25, 2025 (We will turn off Pro in the evening of March 25)
-    target_date = datetime(2025, 3, 25) - timedelta(weeks=4)
+    # Target date: March 26, 2025 (We will turn off Pro on March 27)
+    target_date = datetime(2025, 3, 26) - timedelta(weeks=4)
     target_date_str = target_date.strftime('%Y-%m-%d')
 
     connection = getdb()

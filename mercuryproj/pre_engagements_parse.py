@@ -64,7 +64,7 @@ def load_json_files(directory, user_id, file_pattern):
         return []
 
 
-def post_treatment_engagement_parse():
+def pre_treatment_engagement_parse():
     # Get all users from yesterday
     user_id_list = database.get_w1_users()
 
@@ -219,7 +219,7 @@ def post_treatment_engagement_parse():
 def main():
     app = create_app()
     with app.app_context():
-        post_treatment_engagement_parse()
+        pre_treatment_engagement_parse()
 
 
 if __name__ == "__main__":

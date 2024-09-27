@@ -63,7 +63,7 @@ def load_json_files(directory, user_id, file_pattern):
         return []
 
 
-def post_endline_engagement_parse():
+def post_endline_at_once_parse():
     # Get all users from 4 weeks from yesterday (Those who just completed 4 weeks post-treatment period)
     user_id_list = database.get_w3_users_at_once()
 
@@ -273,7 +273,7 @@ def post_endline_engagement_parse():
 def main():
     app = create_app()
     with app.app_context():
-        post_endline_engagement_parse()
+        post_endline_at_once_parse()
 
 
 if __name__ == "__main__":

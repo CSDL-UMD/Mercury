@@ -79,7 +79,7 @@ def save_json_data_if_not_exists(file_path):
         return True
 
 
-def post_endline_engagement():
+def post_endline_at_once():
     """
     This function collects post-endline engagements using bearer token.
 
@@ -334,7 +334,7 @@ def post_endline_engagement():
 def main():
     app = create_app()
     with app.app_context():
-        post_endline_engagement()
+        post_endline_at_once()
 
 
 if __name__ == "__main__":

@@ -16,6 +16,12 @@ logging_configs = str(files("mercuryproj.logging_configs").joinpath("configs.jso
 def setup_logger():
     with open(str(files("mercuryproj.logging_configs").joinpath("configs.json")), mode='r') as f:
         config = json.load(f)
+    for key in config['handlers']:
+        handler = config['handlers'][key]
+        if "filename" in handler:
+            basedir = os.path.dirname(handler["filename"])
+            if basedir:
+                os.makedirs(basedir, exist_ok=True)
     logger = logging.getLogger("mercury")
     logging.config.dictConfig(config)
 

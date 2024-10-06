@@ -59,9 +59,9 @@ def check_mute_compliance():
     users_dict = database.get_mute_state()
     all_users_state = users_dict.get("users_state", [])
 
-    # Extract user_ids for users where state is "Muting_Done" or "Unmuting_Done"
+    # Extract user_ids for users where state is "Muting_Done" or "Unmute_Done"
     user_ids = [user_info["user_id"] for user_info in all_users_state
-                if user_info["state"] in ["Muting_Done", "Unmuting_Done"]]
+                if user_info["state"] in ["Muting_Done", "Unmute_Done"]]
 
     for user_id in user_ids:
         logger.info(f'Checking muting relationship for {user_id=}')
@@ -161,7 +161,7 @@ def check_mute_compliance():
 
         logger.info('Now, mute compliance processing initiated')
 
-        # Get user's state (Muting_Done or Unmuting_Done)
+        # Get user's state (Muting_Done or Unmute_Done)
         user_state = next((user_info["state"] for user_info in all_users_state if user_info["user_id"] == user_id),
                           None)
 
@@ -177,9 +177,7 @@ def check_mute_compliance():
 
             # Compliance violated, record in database
             if (user_state == "Muting_Done" and not is_muting) or \
-                    (user_state == "Unmuting_Done" and is_muting):
-                print(f"target_user_id={user['id']}, target_username = {user['username']}, case_tag = {user_state}")
-
+                    (user_state == "Unmute_Done" and is_muting):
                 database.record_compliance_violation(
                     user_id=user_id,
                     vsid=vsid,

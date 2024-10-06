@@ -869,8 +869,8 @@ def update_w3_post_pay(user_id):
             logger.info(f"Post-W3 payment info updated for {user_id=}")
         else:
             if not compliance:
-                logger.info(
-                    f"{user_id=} exists in compliance violation table. Skipping post-W3 payment info update.")
+                # Manually check whether this violation is from post-endline period
+                logger.error(f"{user_id=} exists in compliance violation table. Skipping post-W3 payment info update.")
             elif w3_randomized_group != 'p_random_Keep':
                 logger.info(
                     f"{user_id=} is not in 'p_random_Keep' group. Skipping post-W3 payment info update.")

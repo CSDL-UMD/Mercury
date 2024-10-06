@@ -554,8 +554,7 @@ def get_w2_users():
     """
     In post_engagements.py, post_treatment_engagement()
     """
-    four_weeks_ago = datetime.now() - timedelta(days=1) - \
-        timedelta(weeks=4)  # Format as 'YYYY-MM-DD'
+    four_weeks_ago = datetime.now() - timedelta(days=1) - timedelta(weeks=4)  # Format as 'YYYY-MM-DD'
     four_weeks_ago_str = four_weeks_ago.strftime('%Y-%m-%d')
     connection = getdb()
     cursor = connection.cursor()
@@ -577,8 +576,7 @@ def get_w3_users():
     In post_endline_engagements.py, post_endline_engagement()
     """
     # Calculate today's date
-    four_weeks_ago = datetime.now() - timedelta(days=1) - \
-        timedelta(weeks=4)  # Format as 'YYYY-MM-DD'
+    four_weeks_ago = datetime.now() - timedelta(days=1) - timedelta(weeks=4)  # Format as 'YYYY-MM-DD'
     four_weeks_ago_str = four_weeks_ago.strftime('%Y-%m-%d')
     connection = getdb()
     cursor = connection.cursor()

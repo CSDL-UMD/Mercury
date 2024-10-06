@@ -175,10 +175,6 @@ def process_user_chunks(user_id, chunked_target_user_ids):
                     logger.error(f"Unexpected error for {user_id=} muting {target_user_id=}: {e}")
                     database.store_mute_result(user_id, target_user_id, f"Failed - Unexpected Error", datetime.now())
 
-        # Update state as 'Done' after processing all chunks
-        database.store_mute_state(user_id=user_id, state="Done")
-        logger.info(f"Muting process completed for {user_id=}")
-
     except Exception as e:
         logger.error(f"Unexpected error in process_user_chunks for {user_id=}: {e}")
 

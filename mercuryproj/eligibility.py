@@ -88,19 +88,25 @@ def save_user_info():
         try:
             user_fields = 'created_at,public_metrics'
             response = client.get_me(user_fields=user_fields)
+
+            # Check if response is a dictionary and has 'data' key
+            if isinstance(response, dict) and 'data' in response:
+                data = response['data']
+            else:
+                logger.error(f"Unexpected response format for {user_id=}")
+                continue
+
         except Unauthorized:
             logger.error(f"Unauthorized: Authentication failed for {user_id=}")
+            continue
         except Forbidden:
             logger.error(f"Forbidden: The request is understood, but it has been refused for {user_id=}")
+            continue
         except TweepyException as e:
             logger.error(f"Twitter API error for {user_id=} getting self info: {e}")
+            continue
         except Exception as e:
             logger.error(f"Unexpected error for {user_id=} getting self info: {e}")
-
-        if 'data' in response:
-            data = response['data']
-        else:
-            logger.error(f"No 'data' key for {user_id=} in getting self info.")
             continue
 
         created_at_str = data['created_at'].replace("Z", "UTC")

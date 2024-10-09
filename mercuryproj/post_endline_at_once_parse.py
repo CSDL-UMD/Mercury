@@ -56,8 +56,16 @@ def extract_twitter_handle(url):
 def load_json_files(directory, user_id, file_pattern):
     file_path = os.path.join(directory, file_pattern.format(user_id=user_id))
     if os.path.exists(file_path):
-        with open(file_path, 'r') as file:
-            return json.load(file)
+        try:
+            with open(file_path, 'r') as file:
+                content = file.read()
+                if not content:
+                    logger.warning(f"File {file_path} is empty for {user_id=}")
+                    return []
+                return json.loads(content)
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse JSON from {file_path} for {user_id=}. File might be empty or malformed.")
+            return []
     else:
         logger.warning(f"File {file_path} does not exist for {user_id=}")
         return []

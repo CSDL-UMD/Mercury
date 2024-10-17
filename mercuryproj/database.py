@@ -471,10 +471,16 @@ def get_user_info(vsid):
     cursor = connection.cursor()
     cursor.execute("SELECT user_id FROM mercury_user WHERE vsid=%s;", (vsid,))
     result = cursor.fetchone()
-    if result:
-        user_id = result[0]
-        return user_id
-    cursor.close()
+    try:
+        if result:
+            user_id = result[0]
+            return user_id
+        else:
+            logger.error(f"No user found for {vsid=}")
+    except Exception as e:
+        logger.error(f"Error retrieving user info: {str(e)}")
+    finally:
+        cursor.close()
 
 
 def get_w1_session_start(user_id):

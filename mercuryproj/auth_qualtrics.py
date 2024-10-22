@@ -13,7 +13,7 @@ from flask import abort, request, Blueprint
 from platformdirs import user_data_dir
 from . import database
 from .configuration import configuration
-logger = logging.getLogger("mercury.authqualtrics")
+logger = logging.getLogger("mercury.auth_qualtrics")
 
 bp = Blueprint("auth_qualtrics", __name__, url_prefix="/auth_qualtrics")
 

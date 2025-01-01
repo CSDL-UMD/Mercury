@@ -8,7 +8,7 @@ File Management:
 """
 
 from importlib.resources import files
-
+import glob
 import json
 import logging
 import os
@@ -82,7 +82,7 @@ def post_endline_engagement_parse():
 
         tweets = load_json_files(tweets_dir, user_id, "endline-engagements_{user_id}.json")
         arr = load_json_files(likes_dir, user_id, "endline-likes_{user_id}.json")
-        home = load_json_files(hometimeline_dir, user_id, "endline-hometimeline-{user_id}.json")
+        home = glob.glob(os.path.join(hometimeline_dir, f"endline-hometimeline-{user_id}_*.json"))
 
         if not tweets and not arr and not home:
             logger.warning(f"No data found for {user_id=}. Skipping this user.")

@@ -1,3 +1,5 @@
+DELETE FROM auth_temp;
+
 DROP TABLE IF EXISTS auth_temp;
 
 CREATE TABLE auth_temp (

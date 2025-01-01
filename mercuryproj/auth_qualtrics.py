@@ -138,7 +138,7 @@ def qualcallback():
     database.insert_user(**insert_user_payload)
 
     # once done, delete the temporary tokens in DB
-    database.delete_auth_temp(oauth_token)
+    # database.delete_auth_temp(oauth_token) # let's do this manually
     return '''
     <div>
         <p><strong>You may close this tab and go back to the survey.</strong></p>

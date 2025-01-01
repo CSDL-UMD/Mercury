@@ -82,7 +82,24 @@ def post_endline_engagement_parse():
 
         tweets = load_json_files(tweets_dir, user_id, "endline-engagements_{user_id}.json")
         arr = load_json_files(likes_dir, user_id, "endline-likes_{user_id}.json")
-        home = glob.glob(os.path.join(hometimeline_dir, f"endline-hometimeline-{user_id}_*.json"))
+
+        # Find the single hometimeline file for the user
+        home_file = glob.glob(os.path.join(hometimeline_dir, f"endline-hometimeline-{user_id}_*.json"))
+
+        if not home_file:
+            logger.warning(f"No hometimeline file found for {user_id=} in {hometimeline_dir}. Skipping...")
+            home = []  # Set to an empty list if no file is found
+        else:
+            home_file = home_file[0]  # Extract the first (and only) file
+            try:
+                with open(home_file, 'r') as file:
+                    home = json.load(file)  # Load the JSON content
+            except json.JSONDecodeError:
+                logger.error(f"Failed to decode JSON in file: {home_file} for {user_id=}")
+                home = []  # Set to an empty list on JSON decode failure
+            except Exception as e:
+                logger.error(f"Unexpected error processing file {home_file}: {e}")
+                home = []  # Set to an empty list on any other error
 
         if not tweets and not arr and not home:
             logger.warning(f"No data found for {user_id=}. Skipping this user.")

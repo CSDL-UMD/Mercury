@@ -822,7 +822,7 @@ def update_w3_post_pay(user_id):
     3. Checks the compliance table to determine if the user has violated any compliance rules.
        Compliance is considered met if the user is not found in this table.
     4. Inserts the user's data into the w3_post_pay table only if the user
-       is in the 'p_random_Keep' group and has not violated compliance rules.
+       is in the 'p_random_keep' group and has not violated compliance rules.
     5. Logs relevant information at each step and commits the transaction to the database.
 
     Args:
@@ -865,7 +865,7 @@ def update_w3_post_pay(user_id):
         compliance = compliance_result is None
 
         # Insert into w3_post_pay table if conditions are met
-        if compliance and w3_randomized_group == 'p_random_Keep':
+        if compliance and w3_randomized_group == 'p_random_keep':
             insert_query = """
             INSERT INTO w3_post_pay (user_id, vsid, payment)
             VALUES (%s, %s, %s)
@@ -877,9 +877,9 @@ def update_w3_post_pay(user_id):
             if not compliance:
                 # Manually check whether this violation is from post-endline period
                 logger.error(f"{user_id=} exists in compliance violation table. Skipping post-W3 payment info update.")
-            elif w3_randomized_group != 'p_random_Keep':
+            elif w3_randomized_group != 'p_random_keep':
                 logger.info(
-                    f"{user_id=} is not in 'p_random_Keep' group. Skipping post-W3 payment info update.")
+                    f"{user_id=} is not in 'p_random_keep' group. Skipping post-W3 payment info update.")
 
     except Exception as e:
         logger.error(f"Error updating w3_post_pay: {str(e)}")

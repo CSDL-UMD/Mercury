@@ -1,6 +1,7 @@
 """
-This module parses post-treatment engagements and likes for participants on Twitter.
-(Only after we turn off the Pro account on March 25)
+This module parses long-term post-treatment engagements and likes for participants on Twitter.
+(Only after we turn off the Pro account after the wave 3 + 1 month post-endline period is completed for everyone)
+
 - For each account:
     - Parses collected tweets and likes for direct and indirect interactions with target sources.
 
@@ -72,22 +73,20 @@ def load_json_files(directory, user_id, file_pattern):
 
 
 def post_endline_at_once_parse():
-    # Get all users from 4 weeks from yesterday (Those who just completed 4 weeks post-treatment period)
+    # Get all users who completed Wave 3
     user_id_list = database.get_w3_users_at_once()
 
     for user_id in user_id_list:
         logger.info(f"Collecting post-treatment tweets for {user_id=}")
 
         # Load collected data
-        tweets_dir = os.path.join(data_dir, "engagements", "endline-engagements")
-        likes_dir = os.path.join(data_dir, "engagements", "endline-likes")
-        hometimeline_dir = os.path.join(data_dir, "engagements", "endline-hometimeline")
+        tweets_dir = os.path.join(data_dir, "engagements", "longterm-endline-engagements")
+        likes_dir = os.path.join(data_dir, "engagements", "longterm-endline-likes")
 
-        tweets = load_json_files(tweets_dir, user_id, "endline-engagements_{user_id}.json")
-        arr = load_json_files(likes_dir, user_id, "endline-likes_{user_id}.json")
-        home = load_json_files(hometimeline_dir, user_id, "endline-hometimeline-{user_id}.json")
+        tweets = load_json_files(tweets_dir, user_id, f"longterm-endline-engagements_{user_id}.json")
+        arr = load_json_files(likes_dir, user_id, f"longterm-endline-likes_{user_id}.json")
 
-        if not tweets and not arr and not home:
+        if not tweets and not arr:
             logger.warning(f"No data found for {user_id=}. Skipping this user.")
             continue
 
@@ -95,7 +94,7 @@ def post_endline_at_once_parse():
         matches = []
 
         # Parse engagements
-        logger.info(f"Parsing post-endline engagement data for {user_id=}.")
+        logger.info(f"Parsing long-term post-endline engagement data for {user_id=}.")
         for tweet in tweets:
             if "referenced_tweets" not in tweet:
                 if "mentions" in tweet.get("entities", {}):
@@ -155,7 +154,7 @@ def post_endline_at_once_parse():
                                         logger.error(f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
 
         # Parse likes
-        logger.info(f"Parsing post-endline likes data for {user_id=}.")
+        logger.info(f"Parsing long-term post-endline likes data for {user_id=}.")
         processed_tweets = set()
 
         for like in arr:
@@ -201,81 +200,17 @@ def post_endline_at_once_parse():
                                 logger.error(
                                     f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
 
-        # Parse exposures
-        logger.info(f"Parsing post-endline exposure data for {user_id=}.")
-
-        for exposure in home:
-            author_id = exposure['author_id']
-            is_direct_match = str(author_id) in (target_user_id for target_user_id in target_user_ids)
-            if is_direct_match:
-                matches.append({"user_id": user_id, "target_user_id": str(author_id),
-                                "type": "exposure_direct", "created_at": exposure['created_at']})
-            else:
-                if "referenced_tweets" in exposure:
-                    for ref_tweet in exposure['referenced_tweets']:
-                        if ref_tweet['type'] == "retweeted":
-                            text_content = exposure['text']
-                            if text_content.startswith("RT @"):
-                                twitter_handle = text_content.split()[1][1:].split(":")[0]
-                                if twitter_handle and twitter_handle.lower() in map(str.lower, target_usernames):
-                                    try:
-                                        # Find the index of the twitter_handle in the target_usernames list
-                                        handle_index = list(map(str.lower, target_usernames)).index(
-                                            twitter_handle.lower())
-                                        # Use the same index to retrieve the corresponding target_user_id from the target_user_ids
-                                        matched_target_user_id = target_user_ids[handle_index]
-                                        matches.append({"user_id": user_id, "target_user_id": matched_target_user_id,
-                                                        "type": "exposure_retweeted", "created_at": exposure['created_at']})
-                                    except ValueError:
-                                        # Handle the case where the twitter_handle is not found in the target_usernames list
-                                        logger.error(
-                                            f"twitter_handle not found in target_usernames: {twitter_handle}")
-                                    except IndexError:
-                                        # Handle the case where the index is out of bounds for the target_user_ids list
-                                        logger.error(
-                                            f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
-                        elif ref_tweet['type'] == 'quoted' and 'mentions' in exposure['entities']:
-                            for mention in exposure['entities']['mentions']:
-                                if str(mention['id']) in (target_user_id for target_user_id in
-                                                          target_user_ids):
-                                    matches.append({"user_id": user_id, "target_user_id": str(mention['id']),
-                                                    "type": "exposure_quoted", "created_at": exposure['created_at']})
-                        elif ref_tweet['type'] == 'quoted' and 'mentions' not in exposure['entities']:
-                            if 'urls' in exposure.get('entities', {}):
-                                for url_info in exposure['entities']['urls']:
-                                    expanded_url = url_info.get('expanded_url', '')
-                                    twitter_handle = extract_twitter_handle(expanded_url)
-                                    if twitter_handle and twitter_handle.lower() in map(str.lower,
-                                                                                        target_usernames):
-                                        try:
-                                            # Find the index of the twitter_handle in the target_usernames list
-                                            handle_index = list(map(str.lower, target_usernames)).index(
-                                                twitter_handle.lower())
-                                            # Use the same index to retrieve the corresponding target_user_id from the target_user_ids
-                                            matched_target_user_id = target_user_ids[handle_index]
-                                            matches.append(
-                                                {"user_id": user_id, "target_user_id": matched_target_user_id,
-                                                 "type": "exposure_quoted", "created_at": exposure['created_at']})
-                                        except ValueError:
-                                            # Handle the case where the twitter_handle is not found in the target_usernames list
-                                            logger.error(
-                                                f"twitter_handle not found in target_usernames: {twitter_handle}")
-                                        except IndexError:
-                                            # Handle the case where the index is out of bounds for the target_user_ids list
-                                            logger.error(
-                                                f"Index out of bounds when retrieving target_user_id for: {twitter_handle}")
-
         # Save parsed data
         parsed_directory = os.path.join(data_dir, "matched_files")
         if not os.path.exists(parsed_directory):
             logger.warning(f"Configuration dir {parsed_directory} does not exist. Creating it now.")
             os.makedirs(parsed_directory, exist_ok=True)
-        parsed_file_path = os.path.join(parsed_directory, f"post-endline-totalengagements_{user_id}.json")
+        parsed_file_path = os.path.join(parsed_directory, f"longterm-post-endline-totalengagements_{user_id}.json")
         with open(parsed_file_path, 'w') as parsed_file:
             json.dump(matches, parsed_file, indent=4)
-            logger.info(f"Saved parsed post-endline engagements and likes for {user_id=}")
+            logger.info(f"Saved parsed long-term post-endline engagements and likes for {user_id=}")
 
-    logger.info(f"Finished parsing post-engagements!")
+    logger.info(f"Finished parsing long-term post-engagements!")
 
 
 def main():

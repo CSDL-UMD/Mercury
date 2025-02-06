@@ -1,10 +1,12 @@
 """
-This module collects post-endline engagements and likes for participants on Twitter.
-(Only after we turn off the Pro account on March 25)
+This module collects long-term post-endline engagements and likes for participants on Twitter.
+(Only after we turn off the Pro account after the wave 3 + 1 month post-endline period is completed for everyone)
 
 - For each account:
-    - Collects up to 100 pre-treatment tweets (31 days before the date that Wave 1 was taken).
-    - Collects up to 70 liked tweets without a time frame restriction (due to API limitation).
+    - Collects up to 300 pre-treatment tweets
+        - start_time: 31 days after the date that Wave 3 was taken (1 month after the Wave 3 completion time)
+        - end_time: 124 days after the date that Wave 3 was taken (4 months after the Wave 3 completion time)
+    - Collects up to 210 liked tweets without a time frame restriction (due to API limitation).
 
 Data Collection:
 - Engagements (excluding likes) are retrieved using bearer token and the Twitter API's `search all` endpoint.
@@ -15,7 +17,7 @@ Rate Limits:
 - For likes, we authenticate each user and respect the rate limit of 75 requests per 15 mins per authenticated user.
 
 File Management:
-- Collected post-endline engagements and likes are saved in specific directories under the data_dir.
+- Collected long-term post-endline engagements and likes are saved in specific directories under the data_dir.
 """
 
 import time
@@ -89,7 +91,7 @@ def post_endline_at_once():
     However, get_liked_tweets() doesn't allow start_time or end_time.
     Thus, we cannot set time frame, and just collect up to 70 likes per user (for the main study), which can go way back in time.
     """
-    # Get all users after March 26, 2025 (from March 27; after we turned off the Pro)
+    # Get all users after who completed Wave 3
     user_id_list = database.get_w3_users_at_once()
 
     # Chunk user_id_list into chunks of 300
@@ -103,26 +105,22 @@ def post_endline_at_once():
             # For each user_id, we retrieve W2 session start date:
             session_start = database.get_w3_session_start(user_id)
 
-            # Data collection period for pre-treatment engagement: 2 days after (considering muting time) ~ yesterday
-            start_time = (session_start + timedelta(days=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
-            end_time = (session_start + timedelta(weeks=4)).strftime('%Y-%m-%dT%H:%M:%SZ')
+            # Data collection period: 4 wks -- 183 days (30.5 days a month * 6 months) after the Wave 3 completion time
+            start_time = (session_start + timedelta(weeks=4)).strftime('%Y-%m-%dT%H:%M:%SZ')
+            end_time = (session_start + timedelta(days=183)).strftime('%Y-%m-%dT%H:%M:%SZ')
 
             # Directory paths
-            directory_engagement = os.path.join(data_dir, "engagements", "endline-engagements")
-            directory_likes = os.path.join(data_dir, "engagements", "endline-likes")
-            directory_hometimeline = os.path.join(data_dir, "engagements", "endline-hometimeline")
+            directory_engagement = os.path.join(data_dir, "engagements", "longterm-endline-engagements")
+            directory_likes = os.path.join(data_dir, "engagements", "longterm-endline-likes")
 
             if not os.path.exists(directory_engagement):
                 os.makedirs(directory_engagement, exist_ok=True)
             if not os.path.exists(directory_likes):
                 os.makedirs(directory_likes, exist_ok=True)
-            if not os.path.exists(directory_hometimeline):
-                os.makedirs(directory_hometimeline, exist_ok=True)
 
             # File paths
-            engagement_file_path = os.path.join(directory_engagement, f"endline-engagements_{user_id}.json")
-            likes_file_path = os.path.join(directory_likes, f"endline-likes_{user_id}.json")
-            hometimeline_file_path = os.path.join(directory_hometimeline, f"endline-hometimeline-{user_id}.json")
+            engagement_file_path = os.path.join(directory_engagement, f"longterm-endline-engagements_{user_id}.json")
+            likes_file_path = os.path.join(directory_likes, f"longterm-endline-likes_{user_id}.json")
 
             # Check if file already exists
             engagement_file_exists = save_json_data_if_not_exists(engagement_file_path)
@@ -143,7 +141,7 @@ def post_endline_at_once():
 
                 # Create URL and parameters
                 search_url = f"https://api.twitter.com/2/tweets/search/all"
-                # search_url = f"https://api.twitter.com/2/tweets/search/recent"  # For testing
+
                 query_params = {
                     'query': f'from:{username}',
                     'tweet.fields': 'attachments,author_id,conversation_id,created_at,entities,in_reply_to_user_id,lang,public_metrics,referenced_tweets,reply_settings',
@@ -152,7 +150,7 @@ def post_endline_at_once():
                     'expansions': 'author_id,referenced_tweets.id,attachments.media_keys',
                     'start_time': start_time,
                     'end_time': end_time,
-                    'max_results': 100  # Adjust: For the main study, we only collect max 100 tweets per user_id
+                    'max_results': 500  # Adjust: For the main study, we only collect max 300 tweets per user_id
                 }
 
                 try:
@@ -185,7 +183,7 @@ def post_endline_at_once():
 
                 # Save tweets to file
                 try:
-                    file_path = os.path.join(directory_engagement, f"endline-engagements_{user_id}.json")
+                    file_path = os.path.join(directory_engagement, f"longterm-endline-engagements_{user_id}.json")
                     with open(file_path, 'w') as outfile:
                         json.dump(tweets, outfile, indent=4)
                         logger.info(f"Saved post-endline tweets for user: {user_id} to {file_path}")
@@ -238,21 +236,15 @@ def post_endline_at_once():
                                              user_fields=user_fields,
                                              media_fields=media_fields,
                                              expansions=expansions,
-                                             max_results=70,
+                                             max_results=350,
                                              user_auth=True)
 
-                # Set up the directory for storing results
-                directory_likes = os.path.join(data_dir, "engagements", "endline-likes")
-                if not os.path.exists(directory_likes):
-                    logger.warning(f"Configuration dir {directory_likes} does not exist. Creating it now.")
-                    os.makedirs(directory_likes, exist_ok=True)
-
                 # Open the file for writing likes data
-                with open(os.path.join(directory_likes, f"endline-likes_{user_id}.json"), 'a') as outfile:
+                with open(os.path.join(directory_likes, f"longterm-endline-likes_{user_id}.json"), 'a') as outfile:
                     arr = []
                     try:
-                        for response in paginator.flatten(limit=70):
-                            if len(arr) < 71:
+                        for response in paginator.flatten(limit=350):
+                            if len(arr) < 350:
                                 arr.append(response)
                             else:
                                 break
@@ -263,8 +255,8 @@ def post_endline_at_once():
                         time.sleep(60 * 3)  # Sleep for 3 minutes before retrying
                         try:
                             arr = []
-                            for response in paginator.flatten(limit=70):
-                                if len(arr) < 71:
+                            for response in paginator.flatten(limit=350):
+                                if len(arr) < 350:
                                     arr.append(response)
                                 else:
                                     break
@@ -282,53 +274,12 @@ def post_endline_at_once():
 
             time.sleep(3)
 
-            # Check if file already exists
-            hometimeline_file_exists = save_json_data_if_not_exists(hometimeline_file_path)
-
-            if hometimeline_file_exists:
-                # Reverse chronological home timeline : post-endline exposure
-                # Set up the paginator for fetching home timeline data
-                paginator = tweepy.Paginator(client.get_home_timeline,
-                                             limit=4,
-                                             tweet_fields=tweet_fields,
-                                             user_fields=user_fields,
-                                             media_fields=media_fields,
-                                             expansions=expansions,
-                                             start_time=start_time,
-                                             end_time=end_time,
-                                             max_results=100)
-
-                # Set up the directory for storing results
-                directory = os.path.join(data_dir, "engagements", "endline-hometimeline")
-                if not os.path.exists(directory):
-                    logger.warning(f"Configuration dir {directory} does not exist. Creating it now.")
-                    os.makedirs(directory, exist_ok=True)
-
-                # Open the file for writing exposure data
-                with open(os.path.join(directory, f"endline-hometimeline-{user_id}_{end_time}.json"), 'a') as outfile:
-                    home = []
-                    try:
-                        for response in paginator.flatten(limit=400):
-                            if len(home) < 401:
-                                home.append(response)
-                            else:
-                                break
-                        json.dump(home, outfile, indent=4)
-                    except tweepy.TweepyException as e:
-                        logger.error(f"An error occurred while endline reverse-chron for {user_id=}: {e}")
-                    except Exception as e:
-                        logger.error(f"An unexpected error occurred for endline {user_id=}: {e}")
-                logger.info(f'Reverse-chron job for {user_id=} done!')
-
-            # Update w3_post_pay table in the database
-            database.update_w3_post_pay(user_id)
-
         # After each chunk, wait for 15 minutes to respect the rate limit, but not after the last chunk
         if chunk_index < total_chunks:
             logger.info(f"Processed 300 users, sleeping for ~16 minutes to respect the rate limit.")
             time.sleep(16 * 60)
 
-    logger.info(f"Finished collecting and parsing post-engagements!")
+    logger.info(f"Finished collecting and parsing long-term post-engagements!")
 
 
 def main():

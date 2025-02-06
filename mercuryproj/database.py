@@ -603,17 +603,12 @@ def get_w3_users_at_once():
     """
     In post_endline_at_once_parse.py, post_endline_at_once_parse.py
     """
-    # Target date: March 26, 2025 (We will turn off Pro on March 27)
-    target_date = datetime(2025, 3, 26) - timedelta(weeks=4)
-    target_date_str = target_date.strftime('%Y-%m-%d')
-
     connection = getdb()
     cursor = connection.cursor()
     # SQL query to select user_ids where session_start is from 4 weeks from today
     query = """
         SELECT user_id
         FROM w3_randomized_group 
-        WHERE DATE(session_start) > %s;
     """
     cursor.execute(query, (target_date_str,))
     user_ids = [row[0] for row in cursor.fetchall()]

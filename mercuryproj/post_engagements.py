@@ -281,6 +281,9 @@ def post_treatment_engagement():
 
             time.sleep(3)
 
+            # Update w3_invitation table in the database
+            database.update_w3_invitation(user_id)
+
             # Check if file already exists
             hometimeline_file_exists = save_json_data_if_not_exists(hometimeline_file_path)
 
@@ -336,9 +339,6 @@ def post_treatment_engagement():
                 logger.info(f'Reverse-chron job for {user_id=} done!')
 
             time.sleep(3)
-
-            # Update w3_invitation table in the database
-            database.update_w3_invitation(user_id)
 
         # After each chunk, wait for 15 minutes to respect the rate limit, but not after the last chunk
         if chunk_index < total_chunks:

@@ -3,10 +3,10 @@ This module collects long-term post-endline engagements and likes for participan
 (Only after we turn off the Pro account after the wave 3 + 1 month post-endline period is completed for everyone)
 
 - For each account:
-    - Collects up to 300 pre-treatment tweets
+    - Collects up to 500 pre-treatment tweets
         - start_time: 31 days after the date that Wave 3 was taken (1 month after the Wave 3 completion time)
-        - end_time: 124 days after the date that Wave 3 was taken (4 months after the Wave 3 completion time)
-    - Collects up to 210 liked tweets without a time frame restriction (due to API limitation).
+        - end_time: 124 days after the date that Wave 3 was taken (5 months after the Wave 3 completion time)
+    - Collects up to 250 liked tweets without a time frame restriction (due to API limitation).
 
 Data Collection:
 - Engagements (excluding likes) are retrieved using bearer token and the Twitter API's `search all` endpoint.
@@ -236,15 +236,15 @@ def post_endline_at_once():
                                              user_fields=user_fields,
                                              media_fields=media_fields,
                                              expansions=expansions,
-                                             max_results=350,
+                                             max_results=250,
                                              user_auth=True)
 
                 # Open the file for writing likes data
                 with open(os.path.join(directory_likes, f"longterm-endline-likes_{user_id}.json"), 'a') as outfile:
                     arr = []
                     try:
-                        for response in paginator.flatten(limit=350):
-                            if len(arr) < 350:
+                        for response in paginator.flatten(limit=250):
+                            if len(arr) < 250:
                                 arr.append(response)
                             else:
                                 break
@@ -255,8 +255,8 @@ def post_endline_at_once():
                         time.sleep(60 * 3)  # Sleep for 3 minutes before retrying
                         try:
                             arr = []
-                            for response in paginator.flatten(limit=350):
-                                if len(arr) < 350:
+                            for response in paginator.flatten(limit=250):
+                                if len(arr) < 250:
                                     arr.append(response)
                                 else:
                                     break

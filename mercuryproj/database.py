@@ -602,15 +602,16 @@ def get_w3_users():
 def get_w3_users_at_once():
     """
     In post_endline_at_once_parse.py, post_endline_at_once_parse.py
+    - WHERE: update later - at once (filter out those already collected)
     """
     connection = getdb()
     cursor = connection.cursor()
-    # SQL query to select user_ids where session_start is from 4 weeks from today
-    query = """
-        SELECT user_id
-        FROM w3_randomized_group 
-    """
-    cursor.execute(query, (target_date_str,))
+    cursor.execute("""
+                   SELECT user_id
+                   FROM w3_randomized_group
+                   WHERE DATE(session_start) < CURRENT_DATE - INTERVAL '6 months'  
+                   """)
+    # Get all W3 completers
     user_ids = [row[0] for row in cursor.fetchall()]
     cursor.close()
     # Return the list of user_ids

@@ -236,7 +236,7 @@ def post_endline_at_once():
                                              user_fields=user_fields,
                                              media_fields=media_fields,
                                              expansions=expansions,
-                                             max_results=250,
+                                             max_results=100,
                                              user_auth=True)
 
                 # Open the file for writing likes data

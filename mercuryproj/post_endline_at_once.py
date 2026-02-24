@@ -92,7 +92,8 @@ def post_endline_at_once():
     Thus, we cannot set time frame, and just collect up to 70 likes per user (for the main study), which can go way back in time.
     """
     # Get all users after who completed Wave 3
-    user_id_list = database.get_w3_users_at_once()
+    # user_id_list = database.get_w3_users_at_once()
+    user_id_list = database.get_attrit_users()  # Get attrit users
 
     # Chunk user_id_list into chunks of 300
     user_chunks = list(chunker(user_id_list, 300))
@@ -102,12 +103,22 @@ def post_endline_at_once():
         for user_id in user_chunk:
             logger.info(f"Collecting post-endline tweets for {user_id=}")
 
-            # For each user_id, we retrieve W2 session start date:
-            session_start = database.get_w3_session_start(user_id)
+            # For each user_id, we retrieve W3 session start date:
+            # session_start = database.get_w3_session_start(user_id)
 
             # Data collection period: 4 wks -- 183 days (30.5 days a month * 6 months) after the Wave 3 completion time
-            start_time = (session_start + timedelta(weeks=4)).strftime('%Y-%m-%dT%H:%M:%SZ')
-            end_time = (session_start + timedelta(days=183)).strftime('%Y-%m-%dT%H:%M:%SZ')
+            # start_time = (session_start + timedelta(weeks=4, days=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+            # end_time = (session_start + timedelta(days=183)).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+            # For attrit users: no w3_session_start, estimate using w2_session_end + median gap
+            session_start = database.get_w2_session_start(user_id)
+
+            MEDIAN_W2_TO_W3_DAYS = 32.7  # median gap between w2 end_date and w3 start_date
+            estimated_w3_start = session_start + timedelta(days=MEDIAN_W2_TO_W3_DAYS)
+
+            # Data collection period: 4 wks -- 183 days after estimated W3 start
+            start_time = (estimated_w3_start + timedelta(weeks=4, days=1)).strftime('%Y-%m-%dT%H:%M:%SZ')
+            end_time = (estimated_w3_start + timedelta(days=183)).strftime('%Y-%m-%dT%H:%M:%SZ')
 
             # Directory paths
             directory_engagement = os.path.join(data_dir, "engagements", "longterm-endline-engagements")

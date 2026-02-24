@@ -75,6 +75,7 @@ def load_json_files(directory, user_id, file_pattern):
 def post_endline_at_once_parse():
     # Get all users who completed Wave 3
     user_id_list = database.get_w3_users_at_once()
+    # user_id_list = database.get_attrit_users()  # Get attrit users
 
     for user_id in user_id_list:
         logger.info(f"Collecting post-treatment tweets for {user_id=}")

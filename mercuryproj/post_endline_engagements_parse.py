@@ -72,7 +72,8 @@ def load_json_files(directory, user_id, file_pattern):
 
 def post_endline_engagement_parse():
     # Get all users from 4 weeks from yesterday (Those who just completed 4 weeks post-endline period)
-    user_id_list = database.get_w3_users()
+    # user_id_list = database.get_w3_users()
+    user_id_list = database.get_attrit_users()  # Get attrit users
 
     for user_id in user_id_list:
         # Load collected data

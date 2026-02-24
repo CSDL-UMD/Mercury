@@ -88,7 +88,8 @@ def post_endline_engagement():
     Thus, we cannot set time frame, and just collect up to 70 likes per user (for the main study), which can go way back in time.
     """
     # Get all users from 4 weeks from yesterday (Those who just completed 4 weeks post-endline period)
-    user_id_list = database.get_w3_users()
+    # user_id_list = database.get_w3_users()
+    user_id_list = database.get_attrit_users()  # Get attrit users
 
     # Chunk user_id_list into chunks of 300
     user_chunks = list(chunker(user_id_list, 300))
@@ -99,11 +100,22 @@ def post_endline_engagement():
             logger.info(f"Collecting post-endline tweets for {user_id=}")
 
             # For each user_id, we retrieve W2 session start date:
-            session_start = database.get_w3_session_start(user_id)
+            # session_start = database.get_w3_session_start(user_id)
+
+            # For attrit users: no w3_session_start, so estimate using w2_session_start + median gap
+            session_start = database.get_w2_session_start(user_id)
+
+            MEDIAN_W2_TO_W3_DAYS = 32.7  # median gap between w2 end_date and w3 start_date
+
+            estimated_w3_start = session_start + timedelta(days=MEDIAN_W2_TO_W3_DAYS)
+
+            # Data collection period: 2 days after estimated w3 start ~ 4 weeks after
+            start_time = (estimated_w3_start + timedelta(days=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
+            end_time = (estimated_w3_start + timedelta(weeks=4)).strftime('%Y-%m-%dT%H:%M:%SZ')
 
             # Data collection period for pre-treatment engagement: 2 days after (considering muting time) ~ yesterday
-            start_time = (session_start + timedelta(days=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
-            end_time = (session_start + timedelta(weeks=4)).strftime('%Y-%m-%dT%H:%M:%SZ')
+            # start_time = (session_start + timedelta(days=2)).strftime('%Y-%m-%dT%H:%M:%SZ')
+            # end_time = (session_start + timedelta(weeks=4)).strftime('%Y-%m-%dT%H:%M:%SZ')
 
             # Directory paths
             directory_engagement = os.path.join(data_dir, "engagements", "endline-engagements")

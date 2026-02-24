@@ -599,6 +599,23 @@ def get_w3_users():
     return user_ids
 
 
+def get_attrit_users():
+    """
+    Getting attrited users. In post_endline_engagements.py, post_endline_engagement()
+    """
+    connection = getdb()
+    cursor = connection.cursor()
+    query = """
+        SELECT user_id
+        FROM attrit_users 
+    """
+    cursor.execute(query)
+    user_ids = [row[0] for row in cursor.fetchall()]
+    cursor.close()
+    # Return the list of user_ids
+    return user_ids
+
+
 def get_w3_users_at_once():
     """
     In post_endline_at_once_parse.py, post_endline_at_once_parse.py

@@ -112,6 +112,9 @@ def post_endline_at_once():
 
             # For attrit users: no w3_session_start, estimate using w2_session_end + median gap
             session_start = database.get_w2_session_start(user_id)
+            if session_start is None:
+                logger.warning(f"No W2 session start found for {user_id=}. Skipping.")
+                continue
 
             MEDIAN_W2_TO_W3_DAYS = 32.7  # median gap between w2 end_date and w3 start_date
             estimated_w3_start = session_start + timedelta(days=MEDIAN_W2_TO_W3_DAYS)

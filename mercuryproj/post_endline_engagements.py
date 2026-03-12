@@ -104,6 +104,9 @@ def post_endline_engagement():
 
             # For attrit users: no w3_session_start, so estimate using w2_session_start + median gap
             session_start = database.get_w2_session_start(user_id)
+            if session_start is None:
+                logger.warning(f"No W2 session start found for {user_id=}. Skipping.")
+                continue
 
             MEDIAN_W2_TO_W3_DAYS = 32.7  # median gap between w2 end_date and w3 start_date
 
@@ -315,7 +318,7 @@ def post_endline_engagement():
                     os.makedirs(directory, exist_ok=True)
 
                 # Open the file for writing exposure data
-                with open(os.path.join(directory, f"endline-hometimeline-{user_id}_{end_time}.json"), 'a') as outfile:
+                with open(os.path.join(directory, f"endline-hometimeline-{user_id}_{end_time}.json"), 'w') as outfile:
                     home = []
                     try:
                         for response in paginator.flatten(limit=400):
@@ -331,7 +334,7 @@ def post_endline_engagement():
                 logger.info(f'Reverse-chron job for {user_id=} done!')
 
             # Update w3_post_pay table in the database
-            database.update_w3_post_pay(user_id)
+            # database.update_w3_post_pay(user_id)
 
         # After each chunk, wait for 15 minutes to respect the rate limit, but not after the last chunk
         if chunk_index < total_chunks:
